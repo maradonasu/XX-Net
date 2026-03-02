@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# coding:utf-8
+
 import os
 import datetime
 import threading
@@ -11,15 +14,9 @@ import base64
 import hashlib
 import struct
 
-try:
-    from urllib.parse import urlparse, urlencode, parse_qs
-    from urllib.request import urlopen, Request
-    from urllib.error import HTTPError
-except ImportError:
-    from urlparse import urlparse, parse_qs
-    from urllib import urlencode
-    from urllib2 import urlopen, Request, HTTPError
-    import mimetools
+from urllib.parse import urlparse, urlencode, parse_qs
+from urllib.request import urlopen, Request
+from urllib.error import HTTPError
 
 import xlog
 import utils

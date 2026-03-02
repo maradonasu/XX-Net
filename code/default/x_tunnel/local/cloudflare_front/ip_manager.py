@@ -35,13 +35,36 @@ class IpManager(IpManagerBase):
                         domain_map[str(top)] = {
                             "links": 0,
                             "fail_times": 0,
-                            "last_try": 0.0
+                            "last_try": 0.0,
+                            "dns_ips": [],
+                            "dns_index": 0,
                         }
                 self.logger.info("load %s success", fn)
                 break
             except Exception as e:
                 self.logger.warn("load %s for host failed:%r", fn, e)
         return domain_map
+
+    def _resolve_ips(self, sni):
+        ips = []
+        seen = set()
+
+        try:
+            infos = socket.getaddrinfo(sni, 443, socket.AF_INET, socket.SOCK_STREAM)
+            for info in infos:
+                sockaddr = info[4]
+                if not sockaddr:
+                    continue
+                ip = sockaddr[0]
+                if ip in seen:
+                    continue
+                seen.add(ip)
+                ips.append(ip)
+        except Exception as e:
+            self.logger.warn("get ip for %s fail:%r", sni, e)
+            return []
+
+        return ips
 
     def save_domains(self, domains):
         ns = []
@@ -72,19 +95,26 @@ class IpManager(IpManagerBase):
             if info["links"] >= self.config.max_connection_per_domain:
                 continue
 
-            if info["fail_times"] and now - info["last_try"] < 60:
+            dns_ips = info.get("dns_ips", [])
+            dns_index = info.get("dns_index", 0)
+            if info["fail_times"] and now - info["last_try"] < 60 and dns_index >= len(dns_ips):
                 continue
 
             sni = "www." + top_domain
-            try:
-                ip = socket.gethostbyname(sni)
-            except Exception as e:
-                self.logger.warn("get ip for %s fail:%r", sni, e)
+            if not dns_ips or dns_index >= len(dns_ips) or now - info["last_try"] >= 60:
+                dns_ips = self._resolve_ips(sni)
+                info["dns_ips"] = dns_ips
+                info["dns_index"] = 0
+                dns_index = 0
+
+            if not dns_ips:
                 continue
 
+            ip = dns_ips[dns_index]
             self.logger.debug("get ip:%s sni:%s", ip, sni)
             info["links"] += 1
             info["last_try"] = now
+            info["dns_index"] = dns_index + 1
             return {
                 "ip_str": ip,
                 "sni": sni,
@@ -97,7 +127,9 @@ class IpManager(IpManagerBase):
         self.domain_map.setdefault(top_domain, {
                             "links": 0,
                             "fail_times": 0,
-                            "last_try": 0.0
+                            "last_try": 0.0,
+                            "dns_ips": [],
+                            "dns_index": 0,
                         })
         return self.domain_map[top_domain]
 

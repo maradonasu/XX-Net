@@ -1,12 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding:utf-8
 
 import os
 
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+from urllib.parse import urlparse
 
 import simple_http_server
 import env_info

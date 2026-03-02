@@ -1,6 +1,14 @@
 # -*- coding: utf-8 -*-
 
 """
+
+#### From Version 0.9.12 the master repository for _dnslib_ has been moved to GitHub (https://github.com/paulc/dnslib). Please update any links to the original BitBucket repository as this will no longer be maintained.
+
+#### ~~Release 0.9.24 (2024-01-02) will be the last release supporting Python 2.7 and Python <3.7. Supporting old Python versions is increasingly painful and holds back adoption of new features so it's probably time to move on.~~
+
+#### Given the scale of the changes (and API changes) add typing support/modernise the codebase I've decided to leave dnslib as is in maintenance mode for users who are relying on the old API (and Python2 support). I'll try to fix any minor bugs but there isnt going to be any more active development (which is more or less the status quo anyway). 
+
+
 dnslib
 ------
 
@@ -14,7 +22,7 @@ The library provides:
 
  * A server framework allowing the simple creation of custom DNS
    resolvers (dnslib.server) and a number of example servers
-   created using this frameowork
+   created using this framework
 
  * A number of utilities for testing (dnslib.client, dnslib.proxy,
    dnslib.intercept)
@@ -39,11 +47,11 @@ major update to the library - the key changes include:
  * Support for encoding/decoding resource records in 'Zone' (BIND)
    file format
 
- * Support for encoding/decoding backets in 'DiG' format
+ * Support for encoding/decoding packets in 'DiG' format
 
  * Server framework allowing (in most cases) custom resolvers to
    be created by just subclassing the DNSResolver class and
-   overringing the 'resolve' method
+   overriding the 'resolve' method
 
  * A lot of fixes to error detection/handling which should make
    the library much more robust to invalid/unsupported data. The
@@ -58,9 +66,8 @@ major update to the library - the key changes include:
 
  * Ability to compare and diff DNSRecords
 
-This is a large release and despite the testing there therefore are likely
-to be some bugs. Once the 0.9 release is sufficiently stable I would expect
-to release as 1.0.0 (and stabilise th api)
+Classes
+-------
 
 The key DNS packet handling classes are in dnslib.dns and map to the
 standard DNS packet sections:
@@ -75,17 +82,10 @@ standard DNS packet sections:
  * Specific RD types are implemented as subclasses of RD
  * DNS labels are represented by a DNSLabel class - in most cases
    this handles conversion to/from textual representation however
-   does support arbitatry labels via a tuple of bytes objects)
+   does support arbitatry labels via a tuple of bytes objects
 
-Version 0.9 of the library was a major rewrite to support Python 3.2+
-(retaining support for Python 2.7+). As part of the Py3 changes a
-number of other significant changes were intrtoduced:
-
-- Much better error handling (packet decoding errors should be
-  caught and DNSError raised)
-
-Usage:
-------
+Usage
+-----
 
 To decode a DNS packet:
 
@@ -171,7 +171,7 @@ It is also possible to create RRs from a string in zone file format
     >>> RR.fromZone("abc.com IN A 1.2.3.4")
     [<DNS RR: 'abc.com.' rtype=A rclass=IN ttl=0 rdata='1.2.3.4'>]
 
-(Note: this produces a list of RRs which should be unpacked if being
+    (Note: this produces a list of RRs which should be unpacked if being
     passed to add_answer/add_auth/add_ar etc)
 
     >>> q = DNSRecord.question("abc.com")
@@ -264,9 +264,30 @@ It is also possible to create a reply from a string in zone file format:
     www.abc.com.            300     IN      TXT     "Some Text"
     mail.abc.com.           300     IN      CNAME   www.abc.com.
 
+To send a DNSSEC request (EDNS OPT record with DO flag & header AD flag):
+
+    >>> q = DNSRecord(q=DNSQuestion("abc.com",QTYPE.A))
+    >>> q.add_ar(EDNS0(flags="do",udp_len=4096))
+    >>> q.header.ad = 1
+    >>> print(q)
+    ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: ...
+    ;; flags: rd ad; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1
+    ;; QUESTION SECTION:
+    ;abc.com.                       IN      A
+    ;; ADDITIONAL SECTION:
+    ;; OPT PSEUDOSECTION
+    ; EDNS: version: 0, flags: do; udp: 4096
+
+Note that when using the library you should always validate the received TXID 
+
+    q = DNSRecord.question("abc.com")
+    a_pkt = q.send(address,port,tcp=args.tcp)
+    a = DNSRecord.parse(a_pkt)
+    if q.header.id != a.header.id:
+        raise DNSError('Response transaction id does not match query transaction id')
 
 The library also includes a simple framework for generating custom DNS
-resolvers in dnslib.server (see module docs). In post cases this just
+resolvers in dnslib.server (see module docs). In most cases this just
 requires implementing a custom 'resolve' method which receives a question
 object and returns a response.
 
@@ -294,6 +315,7 @@ The library includes a number of client utilities:
 Changelog:
 ----------
 
+```
  *   0.1     2010-09-19  Initial Release
  *   0.2     2010-09-22  Minor fixes
  *   0.3     2010-10-02  Add DNSLabel class to support arbitrary labels (embedded '.')
@@ -307,7 +329,7 @@ Changelog:
  *   0.8.1   2012-11-05  Added NAPTR test case and fixed logic error
                          Patch provided by Stefan Andersson (https://bitbucket.org/norox) - thanks
  *   0.8.2   2012-11-11  Patch to fix IPv6 formatting
-                         Patch provided by Torbjörn Lönnemark (https://bitbucket.org/tobbezz) - thanks
+                         Patch provided by Torbjorn Lonnemark (https://bitbucket.org/tobbezz) - thanks
  *   0.8.3   2013-04-27  Don't parse rdata if rdlength is 0
                          Patch provided by Wesley Shields <wxs@FreeBSD.org> - thanks
  *   0.9.0   2014-05-05  Major update including Py3 support (see docs)
@@ -315,8 +337,77 @@ Changelog:
  *   0.9.2   2014-08-26  Fix Bimap handling of unknown mappings to avoid exception in printing
                          Add typed attributes to classes
                          Misc fixes from James Mills - thanks
- *   0.9.3   2014-08-26  Workaround for argparse bug which raises AssertionError is [] is
+ *   0.9.3   2014-08-26  Workaround for argparse bug which raises AssertionError if [] is
                          present in option text (really?)
+ *   0.9.4   2015-04-10  Fix to support multiple strings in TXT record
+                         Patch provided by James Cherry (https://bitbucket.org/james_cherry) - thanks
+                         NOTE: For consistency this patch changes the 'repr' output for
+                               TXT records to always be quoted
+ *   0.9.5   2015-10-27  Add threading & timeout handling to DNSServer
+ *   0.9.6   2015-10-28  Replace strftime in RRSIG formatting to avoid possible locale issues
+                         Identified by Bryan Everly - thanks
+ *   0.9.7   2017-01-15  Sort out CAA/TYPE257 DiG parsing mismatch
+ *   0.9.8   2019-02-25  Force DNSKEY key to be bytes object
+                         Catch Bimap __wrapped__ attr (used by inspect module in 3.7)
+ *   0.9.9   2019-03-19  Add support for DNSSEC flag getters/setters (from <raul@dinosec.com> - thanks)
+                         Added --dnssec flags to dnslib.client & dnslib.test_decode (sets EDNS0 DO flag)
+                         Added EDNS0 support to dnslib.digparser
+ *   0.9.10  2019-03-24  Fixes to DNSSEC support
+                         Add NSEC RR support
+                         Add --dnssec flag to dnslib.client & dnslib.test_decode
+                         Quote/unquote non-printable characters in DNS labels
+                         Update test data
+                         (Thanks to <raul@dinosec.com> for help)
+ *   0.9.11  2019-12-17  Encode NOTIFY Opcode (Issue #26)
+ *   0.9.12  2019-12-17  Transition master repository to Github (Bitbucket shutting down hg)
+ *   0.9.13  2020-06-01  Handle truncated requests in server.py (Issue #9)
+                         Replace thred.isAlive with thread.is_alive (Deprecated in Py3.9)
+                         Merged Pull Request #4 (Extra options for intercept.py) - thanks to @nolanl
+ *   0.9.14  2020-06-09  Merged Pull Request #10 (Return doctest status via exit code)
+                         Thanks to @mgorny
+ *   0.9.15  2021-05-07  DNSServer fixes - support IPv6 (from Pull Request #21) - thanks to @mikma
+                                         - deamon threads (Pull Request #19) - thanks to @wojons
+                         Add unsupported RR types (Issue #27)
+ *   0.9.16  2021-05-07  Merge pull request #23 from Tugzrida/patch-1
+                            Add support for all RR types to NSEC type bitmap
+                         Merge pull request #17 from sunds/issue_16
+                            Issue 16: uncaught exceptions leak open sockets
+ *   0.9.18  2022-01-09  Validate TXID in client.py (Issue #30 - thanks to @daniel4x)
+ *   0.9.19  2022-01-09  Allow custom log function (logf) in  DNSLogger
+                            (Issue #31 - thanks to @DmitryFrolovTri)
+ *   0.9.20  2022-07-17  Fix DeprecationWarnings about invalid escape sequences
+                            (Pull-Request #39 - thanks to @brianmaissy)
+                         Make DNSLabel matchSuffix and stripSuffix case-insensitive
+                            (Pull-Request #37 - thanks to @NiKiZe)
+                         Add support for HTTPS RR
+                            (Pull-Request #35 - thanks to @jkl-caliber)
+                         Fix display of non-printable characters in TXT records
+                            (Issue #32 - thanks to @sbv-csis)
+                         Add --strip-aaaa option to dnslib.proxy 
+ *   0.9.21  2022-09-19  Minor clean-up / add wheels to distro
+ *   0.9.22  2022-09027  Issue #43 (0.9.21 Raises TypeError instead of DNSError when failing to parse HTTPS records)
+                         Note that we just fix the exception - there still seems to be a problem with parsing HTTPS records
+                         (Thanks to @robinlandstrom)
+ *   0.9.23  2022-10-28  Issue #43: HTTPS reads after RD end (thanks to @robinlandstrom for pull request)
+                         Issue #45: Dnslib fails to handle unknown RR types in NSEC RD type bitmap
+                            Bimap now supports a function to map unknown types which we use to
+                            dynamically map from rtype <-> TYPExxxx for unknown record types
+                            RR zone representation updated to match RFC3597
+                         Pull Request #47: Add support for DS, SSHFP, and TLSA records (thanks to @rmbolger)
+ *   0.9.24  2024-01-02  Merge multiple PRs
+                            #49 - Generate README.md (via symlink)
+                            #51 - Update Github CI checkout & setup-python actions (and remove Python 2.7 CI support)
+                                  (thanks to @SpencerIsGiddy)
+                            #54 - Support for RP records (thanks to @ryan-gang)
+                            #57 - Support for LOC records (thanks to @valentinesd)
+ *   0.9.25  2024-07-08  Minor fixes:
+                            #60 - SyntaxWarning with Python 3.12 (@kitterma)
+                            #63 - Records with empty rdata causes pack() to fail (@peteralm80)
+                            #66 - DNS SRV "target" names are compressed (@bobstanden)
+ *   0.9.26  2025-03-02  Minor fixes:
+                            #72 - Implement matchWildcard (DNSLabel.matchGlob doesn't match expected wildcard DNS record syntax)
+                         (Thanks to @gsnedders)
+```
 
 License:
 --------
@@ -326,20 +417,21 @@ BSD
 Author:
 -------
 
- *   Paul Chakravarti (paul.chakravarti@gmail.com)
+ *   PaulC
 
 Master Repository/Issues:
 -------------------------
 
- *   https://bitbucket.org/paulc/dnslib
-    (Cloned on GitHub: https://github.com/paulchakravarti/dnslib)
+ *   https://github.com/paulc/dnslib
+
+ (Note: https://bitbucket.org/paulc/dnslib has been deprecated and will not be updated)
+
 """
 
 from dnslib.dns import *
 
-version = "0.9.3"
+version = "0.9.26"
 
 if __name__ == '__main__':
-    import doctest,textwrap
-    doctest.testmod(optionflags=doctest.ELLIPSIS)
-
+    import doctest,sys,textwrap
+    sys.exit(0 if doctest.testmod(optionflags=doctest.ELLIPSIS).failed == 0 else 1)

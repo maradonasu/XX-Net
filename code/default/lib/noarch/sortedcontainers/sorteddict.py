@@ -1,795 +1,812 @@
-# -*- coding: utf-8 -*-
-#
-# Sorted dict implementation.
+"""Sorted Dict
+==============
 
-from .sortedset import SortedSet
+:doc:`Sorted Containers<index>` is an Apache2 licensed Python sorted
+collections library, written in pure-Python, and fast as C-extensions. The
+:doc:`introduction<introduction>` is the best way to get started.
+
+Sorted dict implementations:
+
+.. currentmodule:: sortedcontainers
+
+* :class:`SortedDict`
+* :class:`SortedKeysView`
+* :class:`SortedItemsView`
+* :class:`SortedValuesView`
+
+"""
+
+import sys
+import warnings
+
+from itertools import chain
+
 from .sortedlist import SortedList, recursive_repr
-from .sortedlistwithkey import SortedListWithKey
-from collections import Set, Sequence
-from collections import KeysView as AbstractKeysView
-from collections import ValuesView as AbstractValuesView
-from collections import ItemsView as AbstractItemsView
+from .sortedset import SortedSet
 
-from functools import wraps
-from sys import hexversion
+###############################################################################
+# BEGIN Python 2/3 Shims
+###############################################################################
 
-_NotGiven = object()
+try:
+    from collections.abc import (
+        ItemsView, KeysView, Mapping, ValuesView, Sequence
+    )
+except ImportError:
+    from collections import ItemsView, KeysView, Mapping, ValuesView, Sequence
 
-
-def not26(func):
-    """Function decorator for methods not implemented in Python 2.6."""
-
-    @wraps(func)
-    def errfunc(*args, **kwargs):
-        raise NotImplementedError
-
-    if hexversion < 0x02070000:
-        return errfunc
-    else:
-        return func
-
-
-class _IlocWrapper:
-    def __init__(self, _dict):
-        self._dict = _dict
-
-    def __len__(self):
-        return len(self._dict)
-
-    def __getitem__(self, index):
-        """
-        Very efficiently return the key at index *index* in iteration. Supports
-        negative indices and slice notation. Raises IndexError on invalid
-        *index*.
-        """
-        return self._dict._list[index]
-
-    def __delitem__(self, index):
-        """
-        Remove the ``sdict[sdict.iloc[index]]`` from *sdict*. Supports negative
-        indices and slice notation. Raises IndexError on invalid *index*.
-        """
-        _temp = self._dict
-        _list = _temp._list
-        _delitem = _temp._delitem
-
-        if isinstance(index, slice):
-            keys = _list[index]
-            del _list[index]
-            for key in keys:
-                _delitem(key)
-        else:
-            key = _list[index]
-            del _list[index]
-            _delitem(key)
+###############################################################################
+# END Python 2/3 Shims
+###############################################################################
 
 
 class SortedDict(dict):
-    """
-    A SortedDict provides the same methods as a dict.  Additionally, a
-    SortedDict efficiently maintains its keys in sorted order. Consequently, the
-    keys method will return the keys in sorted order, the popitem method will
-    remove the item with the highest key, etc.
-    """
+    """Sorted dict is a sorted mutable mapping.
 
+    Sorted dict keys are maintained in sorted order. The design of sorted dict
+    is simple: sorted dict inherits from dict to store items and maintains a
+    sorted list of keys.
+
+    Sorted dict keys must be hashable and comparable. The hash and total
+    ordering of keys must not change while they are stored in the sorted dict.
+
+    Mutable mapping methods:
+
+    * :func:`SortedDict.__getitem__` (inherited from dict)
+    * :func:`SortedDict.__setitem__`
+    * :func:`SortedDict.__delitem__`
+    * :func:`SortedDict.__iter__`
+    * :func:`SortedDict.__len__` (inherited from dict)
+
+    Methods for adding items:
+
+    * :func:`SortedDict.setdefault`
+    * :func:`SortedDict.update`
+
+    Methods for removing items:
+
+    * :func:`SortedDict.clear`
+    * :func:`SortedDict.pop`
+    * :func:`SortedDict.popitem`
+
+    Methods for looking up items:
+
+    * :func:`SortedDict.__contains__` (inherited from dict)
+    * :func:`SortedDict.get` (inherited from dict)
+    * :func:`SortedDict.peekitem`
+
+    Methods for views:
+
+    * :func:`SortedDict.keys`
+    * :func:`SortedDict.items`
+    * :func:`SortedDict.values`
+
+    Methods for miscellany:
+
+    * :func:`SortedDict.copy`
+    * :func:`SortedDict.fromkeys`
+    * :func:`SortedDict.__reversed__`
+    * :func:`SortedDict.__eq__` (inherited from dict)
+    * :func:`SortedDict.__ne__` (inherited from dict)
+    * :func:`SortedDict.__repr__`
+    * :func:`SortedDict._check`
+
+    Sorted list methods available (applies to keys):
+
+    * :func:`SortedList.bisect_left`
+    * :func:`SortedList.bisect_right`
+    * :func:`SortedList.count`
+    * :func:`SortedList.index`
+    * :func:`SortedList.irange`
+    * :func:`SortedList.islice`
+    * :func:`SortedList._reset`
+
+    Additional sorted list methods available, if key-function used:
+
+    * :func:`SortedKeyList.bisect_key_left`
+    * :func:`SortedKeyList.bisect_key_right`
+    * :func:`SortedKeyList.irange_key`
+
+    Sorted dicts may only be compared for equality and inequality.
+
+    """
     def __init__(self, *args, **kwargs):
+        """Initialize sorted dict instance.
+
+        Optional key-function argument defines a callable that, like the `key`
+        argument to the built-in `sorted` function, extracts a comparison key
+        from each dictionary key. If no function is specified, the default
+        compares the dictionary keys directly. The key-function argument must
+        be provided as a positional argument and must come before all other
+        arguments.
+
+        Optional iterable argument provides an initial sequence of pairs to
+        initialize the sorted dict. Each pair in the sequence defines the key
+        and corresponding value. If a key is seen more than once, the last
+        value associated with it is stored in the new sorted dict.
+
+        Optional mapping argument provides an initial mapping of items to
+        initialize the sorted dict.
+
+        If keyword arguments are given, the keywords themselves, with their
+        associated values, are added as items to the dictionary. If a key is
+        specified both in the positional argument and as a keyword argument,
+        the value associated with the keyword is stored in the
+        sorted dict.
+
+        Sorted dict keys must be hashable, per the requirement for Python's
+        dictionaries. Keys (or the result of the key-function) must also be
+        comparable, per the requirement for sorted lists.
+
+        >>> d = {'alpha': 1, 'beta': 2}
+        >>> SortedDict([('alpha', 1), ('beta', 2)]) == d
+        True
+        >>> SortedDict({'alpha': 1, 'beta': 2}) == d
+        True
+        >>> SortedDict(alpha=1, beta=2) == d
+        True
+
         """
-        A SortedDict provides the same methods as a dict.  Additionally, a
-        SortedDict efficiently maintains its keys in sorted order. Consequently,
-        the keys method will return the keys in sorted order, the popitem method
-        will remove the item with the highest key, etc.
-
-        An optional *key* argument defines a callable that, like the `key`
-        argument to Python's `sorted` function, extracts a comparison key from
-        each dict key. If no function is specified, the default compares the
-        dict keys directly. The `key` argument must be provided as a positional
-        argument and must come before all other arguments.
-
-        An optional *load* argument defines the load factor of the internal list
-        used to maintain sort order. If present, this argument must come before
-        an iterable. The default load factor of '1000' works well for lists from
-        tens to tens of millions of elements.  Good practice is to use a value
-        that is the cube root of the list size.  With billions of elements, the
-        best load factor depends on your usage.  It's best to leave the load
-        factor at the default until you start benchmarking.
-
-        An optional *iterable* argument provides an initial series of items to
-        populate the SortedDict.  Each item in the series must itself contain
-        two items.  The first is used as a key in the new dictionary, and the
-        second as the key's value. If a given key is seen more than once, the
-        last value associated with it is retained in the new dictionary.
-
-        If keyword arguments are given, the keywords themselves with their
-        associated values are added as items to the dictionary. If a key is
-        specified both in the positional argument and as a keyword argument, the
-        value associated with the keyword is retained in the dictionary. For
-        example, these all return a dictionary equal to ``{"one": 2, "two":
-        3}``:
-
-        * ``SortedDict(one=2, two=3)``
-        * ``SortedDict({'one': 2, 'two': 3})``
-        * ``SortedDict(zip(('one', 'two'), (2, 3)))``
-        * ``SortedDict([['two', 3], ['one', 2]])``
-
-        The first example only works for keys that are valid Python
-        identifiers; the others work with any valid keys.
-        """
-        if len(args) > 0 and (args[0] is None or callable(args[0])):
-            self._key = args[0]
+        if args and (args[0] is None or callable(args[0])):
+            _key = self._key = args[0]
             args = args[1:]
         else:
-            self._key = None
+            _key = self._key = None
 
-        if len(args) > 0 and type(args[0]) == int:
-            self._load = args[0]
-            args = args[1:]
-        else:
-            self._load = 1000
+        self._list = SortedList(key=_key)
 
-        if self._key is None:
-            self._list = SortedList(load=self._load)
-        else:
-            self._list = SortedListWithKey(key=self._key, load=self._load)
+        # Reaching through ``self._list`` repeatedly adds unnecessary overhead
+        # so cache references to sorted list methods.
 
-        # Cache function pointers to dict methods.
+        _list = self._list
+        self._list_add = _list.add
+        self._list_clear = _list.clear
+        self._list_iter = _list.__iter__
+        self._list_reversed = _list.__reversed__
+        self._list_pop = _list.pop
+        self._list_remove = _list.remove
+        self._list_update = _list.update
 
-        _dict = super(SortedDict, self)
-        self._dict = _dict
-        self._clear = _dict.clear
-        self._delitem = _dict.__delitem__
-        self._iter = _dict.__iter__
-        self._pop = _dict.pop
-        self._setdefault = _dict.setdefault
-        self._setitem = _dict.__setitem__
-        self._update = _dict.update
+        # Expose some sorted list methods publicly.
 
-        # Cache function pointers to SortedList methods.
+        self.bisect_left = _list.bisect_left
+        self.bisect = _list.bisect_right
+        self.bisect_right = _list.bisect_right
+        self.index = _list.index
+        self.irange = _list.irange
+        self.islice = _list.islice
+        self._reset = _list._reset
 
-        self._list_add = self._list.add
-        self._list_bisect_left = self._list.bisect_left
-        self._list_bisect_right = self._list.bisect_right
-        self._list_clear = self._list.clear
-        self._list_index = self._list.index
-        self._list_pop = self._list.pop
-        self._list_remove = self._list.remove
-        self._list_update = self._list.update
+        if _key is not None:
+            self.bisect_key_left = _list.bisect_key_left
+            self.bisect_key_right = _list.bisect_key_right
+            self.bisect_key = _list.bisect_key
+            self.irange_key = _list.irange_key
 
-        self.iloc = _IlocWrapper(self)
+        self._update(*args, **kwargs)
 
-        self.update(*args, **kwargs)
+
+    @property
+    def key(self):
+        """Function used to extract comparison key from keys.
+
+        Sorted dict compares keys directly when the key function is none.
+
+        """
+        return self._key
+
+
+    @property
+    def iloc(self):
+        """Cached reference of sorted keys view.
+
+        Deprecated in version 2 of Sorted Containers. Use
+        :func:`SortedDict.keys` instead.
+
+        """
+        # pylint: disable=attribute-defined-outside-init
+        try:
+            return self._iloc
+        except AttributeError:
+            warnings.warn(
+                'sorted_dict.iloc is deprecated.'
+                ' Use SortedDict.keys() instead.',
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            _iloc = self._iloc = SortedKeysView(self)
+            return _iloc
+
 
     def clear(self):
-        """Remove all elements from the dictionary."""
-        self._clear()
+
+        """Remove all items from sorted dict.
+
+        Runtime complexity: `O(n)`
+
+        """
+        dict.clear(self)
         self._list_clear()
 
+
     def __delitem__(self, key):
+        """Remove item from sorted dict identified by `key`.
+
+        ``sd.__delitem__(key)`` <==> ``del sd[key]``
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> sd = SortedDict({'a': 1, 'b': 2, 'c': 3})
+        >>> del sd['b']
+        >>> sd
+        SortedDict({'a': 1, 'c': 3})
+        >>> del sd['z']
+        Traceback (most recent call last):
+          ...
+        KeyError: 'z'
+
+        :param key: `key` for item lookup
+        :raises KeyError: if key not found
+
         """
-        Remove ``d[key]`` from *d*.  Raises a KeyError if *key* is not in the
-        dictionary.
-        """
-        self._delitem(key)
+        dict.__delitem__(self, key)
         self._list_remove(key)
 
+
     def __iter__(self):
-        """Create an iterator over the sorted keys of the dictionary."""
-        return iter(self._list)
+        """Return an iterator over the keys of the sorted dict.
+
+        ``sd.__iter__()`` <==> ``iter(sd)``
+
+        Iterating the sorted dict while adding or deleting items may raise a
+        :exc:`RuntimeError` or fail to iterate over all keys.
+
+        """
+        return self._list_iter()
+
 
     def __reversed__(self):
+        """Return a reverse iterator over the keys of the sorted dict.
+
+        ``sd.__reversed__()`` <==> ``reversed(sd)``
+
+        Iterating the sorted dict while adding or deleting items may raise a
+        :exc:`RuntimeError` or fail to iterate over all keys.
+
         """
-        Create a reversed iterator over the sorted keys of the dictionary.
-        """
-        return reversed(self._list)
+        return self._list_reversed()
+
 
     def __setitem__(self, key, value):
-        """Set `d[key]` to *value*."""
+        """Store item in sorted dict with `key` and corresponding `value`.
+
+        ``sd.__setitem__(key, value)`` <==> ``sd[key] = value``
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> sd = SortedDict()
+        >>> sd['c'] = 3
+        >>> sd['a'] = 1
+        >>> sd['b'] = 2
+        >>> sd
+        SortedDict({'a': 1, 'b': 2, 'c': 3})
+
+        :param key: key for item
+        :param value: value for item
+
+        """
         if key not in self:
             self._list_add(key)
-        self._setitem(key, value)
+        dict.__setitem__(self, key, value)
+
+    _setitem = __setitem__
+
+
+    def __or__(self, other):
+        if not isinstance(other, Mapping):
+            return NotImplemented
+        items = chain(self.items(), other.items())
+        return self.__class__(self._key, items)
+
+
+    def __ror__(self, other):
+        if not isinstance(other, Mapping):
+            return NotImplemented
+        items = chain(other.items(), self.items())
+        return self.__class__(self._key, items)
+
+
+    def __ior__(self, other):
+        self._update(other)
+        return self
+
 
     def copy(self):
-        """Return a shallow copy of the sorted dictionary."""
-        return self.__class__(self._key, self._load, iter(self.items()))
+        """Return a shallow copy of the sorted dict.
+
+        Runtime complexity: `O(n)`
+
+        :return: new sorted dict
+
+        """
+        return self.__class__(self._key, self.items())
 
     __copy__ = copy
 
+
     @classmethod
-    def fromkeys(cls, seq, value=None):
+    def fromkeys(cls, iterable, value=None):
+        """Return a new sorted dict initailized from `iterable` and `value`.
+
+        Items in the sorted dict have keys from `iterable` and values equal to
+        `value`.
+
+        Runtime complexity: `O(n*log(n))`
+
+        :return: new sorted dict
+
         """
-        Create a new dictionary with keys from *seq* and values set to *value*.
+        return cls((key, value) for key in iterable)
+
+
+    def keys(self):
+        """Return new sorted keys view of the sorted dict's keys.
+
+        See :class:`SortedKeysView` for details.
+
+        :return: new sorted keys view
+
         """
-        return cls((key, value) for key in seq)
+        return SortedKeysView(self)
 
-    if hexversion < 0x03000000:
-        def items(self):
-            """
-            Return a list of the dictionary's items (``(key, value)`` pairs).
-            """
-            return list(self.items())
-    else:
-        def items(self):
-            """
-            Return a new ItemsView of the dictionary's items.  In addition to
-            the methods provided by the built-in `view` the ItemsView is
-            indexable (e.g. ``d.items()[5]``).
-            """
-            return ItemsView(self)
 
-    def iteritems(self):
-        """Return an iterable over the items (``(key, value)`` pairs)."""
-        return iter((key, self[key]) for key in self._list)
+    def items(self):
+        """Return new sorted items view of the sorted dict's items.
 
-    if hexversion < 0x03000000:
-        def keys(self):
-            """Return a SortedSet of the dictionary's keys."""
-            return SortedSet(self._list, key=self._key, load=self._load)
-    else:
-        def keys(self):
-            """
-            Return a new KeysView of the dictionary's keys.  In addition to the
-            methods provided by the built-in `view` the KeysView is indexable
-            (e.g. ``d.keys()[5]``).
-            """
-            return KeysView(self)
+        See :class:`SortedItemsView` for details.
 
-    def iterkeys(self):
-        """Return an iterable over the keys of the dictionary."""
-        return iter(self._list)
+        :return: new sorted items view
 
-    if hexversion < 0x03000000:
-        def values(self):
-            """Return a list of the dictionary's values."""
-            return list(self.values())
-    else:
-        def values(self):
-            """
-            Return a new :class:`ValuesView` of the dictionary's values.
-            In addition to the methods provided by the built-in `view` the
-            ValuesView is indexable (e.g., ``d.values()[5]``).
-            """
-            return ValuesView(self)
-
-    def itervalues(self):
-        """Return an iterable over the values of the dictionary."""
-        return iter(self[key] for key in self._list)
-
-    def pop(self, key, default=_NotGiven):
         """
-        If *key* is in the dictionary, remove it and return its value,
-        else return *default*. If *default* is not given and *key* is not in
-        the dictionary, a KeyError is raised.
+        return SortedItemsView(self)
+
+
+    def values(self):
+        """Return new sorted values view of the sorted dict's values.
+
+        See :class:`SortedValuesView` for details.
+
+        :return: new sorted values view
+
+        """
+        return SortedValuesView(self)
+
+
+    if sys.hexversion < 0x03000000:
+        def __make_raise_attributeerror(original, alternate):
+            # pylint: disable=no-self-argument
+            message = (
+                'SortedDict.{original}() is not implemented.'
+                ' Use SortedDict.{alternate}() instead.'
+            ).format(original=original, alternate=alternate)
+            def method(self):
+                # pylint: disable=missing-docstring,unused-argument
+                raise AttributeError(message)
+            method.__name__ = original  # pylint: disable=non-str-assignment-to-dunder-name
+            method.__doc__ = message
+            return property(method)
+
+        iteritems = __make_raise_attributeerror('iteritems', 'items')
+        iterkeys = __make_raise_attributeerror('iterkeys', 'keys')
+        itervalues = __make_raise_attributeerror('itervalues', 'values')
+        viewitems = __make_raise_attributeerror('viewitems', 'items')
+        viewkeys = __make_raise_attributeerror('viewkeys', 'keys')
+        viewvalues = __make_raise_attributeerror('viewvalues', 'values')
+
+
+    class _NotGiven(object):
+        # pylint: disable=too-few-public-methods
+        def __repr__(self):
+            return '<not-given>'
+
+    __not_given = _NotGiven()
+
+    def pop(self, key, default=__not_given):
+        """Remove and return value for item identified by `key`.
+
+        If the `key` is not found then return `default` if given. If `default`
+        is not given then raise :exc:`KeyError`.
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> sd = SortedDict({'a': 1, 'b': 2, 'c': 3})
+        >>> sd.pop('c')
+        3
+        >>> sd.pop('z', 26)
+        26
+        >>> sd.pop('y')
+        Traceback (most recent call last):
+          ...
+        KeyError: 'y'
+
+        :param key: `key` for item
+        :param default: `default` value if key not found (optional)
+        :return: value for item
+        :raises KeyError: if `key` not found and `default` not given
+
         """
         if key in self:
             self._list_remove(key)
-            return self._pop(key)
+            return dict.pop(self, key)
         else:
-            if default is _NotGiven:
+            if default is self.__not_given:
                 raise KeyError(key)
-            else:
-                return default
+            return default
 
-    def popitem(self):
-        """
-        Remove and return the ``(key, value)`` pair with the greatest *key*
-        from the dictionary.
 
-        If the dictionary is empty, calling `popitem` raises a
-        KeyError`.
+    def popitem(self, index=-1):
+        """Remove and return ``(key, value)`` pair at `index` from sorted dict.
+
+        Optional argument `index` defaults to -1, the last item in the sorted
+        dict. Specify ``index=0`` for the first item in the sorted dict.
+
+        If the sorted dict is empty, raises :exc:`KeyError`.
+
+        If the `index` is out of range, raises :exc:`IndexError`.
+
+        Runtime complexity: `O(log(n))`
+
+        >>> sd = SortedDict({'a': 1, 'b': 2, 'c': 3})
+        >>> sd.popitem()
+        ('c', 3)
+        >>> sd.popitem(0)
+        ('a', 1)
+        >>> sd.popitem(100)
+        Traceback (most recent call last):
+          ...
+        IndexError: list index out of range
+
+        :param int index: `index` of item (default -1)
+        :return: key and value pair
+        :raises KeyError: if sorted dict is empty
+        :raises IndexError: if `index` out of range
+
         """
-        if not len(self):
+        if not self:
             raise KeyError('popitem(): dictionary is empty')
 
-        key = self._list_pop()
-        value = self._pop(key)
-
+        key = self._list_pop(index)
+        value = dict.pop(self, key)
         return (key, value)
 
-    def setdefault(self, key, default=None):
+
+    def peekitem(self, index=-1):
+        """Return ``(key, value)`` pair at `index` in sorted dict.
+
+        Optional argument `index` defaults to -1, the last item in the sorted
+        dict. Specify ``index=0`` for the first item in the sorted dict.
+
+        Unlike :func:`SortedDict.popitem`, the sorted dict is not modified.
+
+        If the `index` is out of range, raises :exc:`IndexError`.
+
+        Runtime complexity: `O(log(n))`
+
+        >>> sd = SortedDict({'a': 1, 'b': 2, 'c': 3})
+        >>> sd.peekitem()
+        ('c', 3)
+        >>> sd.peekitem(0)
+        ('a', 1)
+        >>> sd.peekitem(100)
+        Traceback (most recent call last):
+          ...
+        IndexError: list index out of range
+
+        :param int index: index of item (default -1)
+        :return: key and value pair
+        :raises IndexError: if `index` out of range
+
         """
-        If *key* is in the dictionary, return its value.  If not, insert *key*
-        with a value of *default* and return *default*.  *default* defaults to
-        ``None``.
+        key = self._list[index]
+        return key, self[key]
+
+
+    def setdefault(self, key, default=None):
+        """Return value for item identified by `key` in sorted dict.
+
+        If `key` is in the sorted dict then return its value. If `key` is not
+        in the sorted dict then insert `key` with value `default` and return
+        `default`.
+
+        Optional argument `default` defaults to none.
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> sd = SortedDict()
+        >>> sd.setdefault('a', 1)
+        1
+        >>> sd.setdefault('a', 10)
+        1
+        >>> sd
+        SortedDict({'a': 1})
+
+        :param key: key for item
+        :param default: value for item (default None)
+        :return: value for item identified by `key`
+
         """
         if key in self:
             return self[key]
-        else:
-            self._setitem(key, default)
-            self._list_add(key)
-            return default
+        dict.__setitem__(self, key, default)
+        self._list_add(key)
+        return default
+
 
     def update(self, *args, **kwargs):
-        """
-        Update the dictionary with the key/value pairs from *other*, overwriting
-        existing keys.
+        """Update sorted dict with items from `args` and `kwargs`.
 
-        *update* accepts either another dictionary object or an iterable of
-        key/value pairs (as a tuple or other iterable of length two).  If
-        keyword arguments are specified, the dictionary is then updated with
-        those key/value pairs: ``d.update(red=1, blue=2)``.
+        Overwrites existing items.
+
+        Optional arguments `args` and `kwargs` may be a mapping, an iterable of
+        pairs or keyword arguments. See :func:`SortedDict.__init__` for
+        details.
+
+        :param args: mapping or iterable of pairs
+        :param kwargs: keyword arguments mapping
+
         """
-        if not len(self):
-            self._update(*args, **kwargs)
-            self._list_update(self._iter())
+        if not self:
+            dict.update(self, *args, **kwargs)
+            self._list_update(dict.__iter__(self))
             return
 
-        if (len(kwargs) == 0 and len(args) == 1 and isinstance(args[0], dict)):
+        if not kwargs and len(args) == 1 and isinstance(args[0], dict):
             pairs = args[0]
         else:
             pairs = dict(*args, **kwargs)
 
         if (10 * len(pairs)) > len(self):
-            self._update(pairs)
+            dict.update(self, pairs)
             self._list_clear()
-            self._list_update(self._iter())
+            self._list_update(dict.__iter__(self))
         else:
             for key in pairs:
-                self[key] = pairs[key]
+                self._setitem(key, pairs[key])
 
-    def index(self, key, start=None, stop=None):
-        """
-        Return the smallest *k* such that `d.iloc[k] == key` and `i <= k < j`.
-        Raises `ValueError` if *key* is not present.  *stop* defaults to the end
-        of the set.  *start* defaults to the beginning.  Negative indexes are
-        supported, as for slice indices.
-        """
-        return self._list_index(key, start, stop)
+    _update = update
 
-    def bisect_left(self, key):
-        """
-        Similar to the ``bisect`` module in the standard library, this returns
-        an appropriate index to insert *key* in SortedDict. If *key* is
-        already present in SortedDict, the insertion point will be before (to
-        the left of) any existing entries.
-        """
-        return self._list_bisect_left(key)
-
-    def bisect(self, key):
-        """Same as bisect_right."""
-        return self._list_bisect_right(key)
-
-    def bisect_right(self, key):
-        """
-        Same as `bisect_left`, but if *key* is already present in SortedDict,
-        the insertion point will be after (to the right of) any existing
-        entries.
-        """
-        return self._list_bisect_right(key)
-
-    @not26
-    def viewkeys(self):
-        """
-        In Python 2.7 and later, return a new `KeysView` of the dictionary's
-        keys.
-
-        In Python 2.6, raise a NotImplementedError.
-        """
-        return KeysView(self)
-
-    @not26
-    def viewvalues(self):
-        """
-        In Python 2.7 and later, return a new `ValuesView` of the dictionary's
-        values.
-
-        In Python 2.6, raise a NotImplementedError.
-        """
-        return ValuesView(self)
-
-    @not26
-    def viewitems(self):
-        """
-        In Python 2.7 and later, return a new `ItemsView` of the dictionary's
-        items.
-
-        In Python 2.6, raise a NotImplementedError.
-        """
-        return ItemsView(self)
 
     def __reduce__(self):
-        return (self.__class__, (self._key, self._load, list(self.items())))
+        """Support for pickle.
 
-    @recursive_repr
+        The tricks played with caching references in
+        :func:`SortedDict.__init__` confuse pickle so customize the reducer.
+
+        """
+        items = dict.copy(self)
+        return (type(self), (self._key, items))
+
+
+    @recursive_repr()
     def __repr__(self):
-        temp = '{0}({1}, {2}, {{{3}}})'
-        items = ', '.join('{0}: {1}'.format(repr(key), repr(self[key]))
-                          for key in self._list)
-        return temp.format(
-            self.__class__.__name__,
-            repr(self._key),
-            repr(self._load),
-            items
-        )
+        """Return string representation of sorted dict.
+
+        ``sd.__repr__()`` <==> ``repr(sd)``
+
+        :return: string representation
+
+        """
+        _key = self._key
+        type_name = type(self).__name__
+        key_arg = '' if _key is None else '{0!r}, '.format(_key)
+        item_format = '{0!r}: {1!r}'.format
+        items = ', '.join(item_format(key, self[key]) for key in self._list)
+        return '{0}({1}{{{2}}})'.format(type_name, key_arg, items)
+
 
     def _check(self):
-        self._list._check()
-        assert len(self) == len(self._list)
-        assert all(val in self for val in self._list)
+        """Check invariants of sorted dict.
+
+        Runtime complexity: `O(n)`
+
+        """
+        _list = self._list
+        _list._check()
+        assert len(self) == len(_list)
+        assert all(key in self for key in _list)
 
 
-class KeysView(AbstractKeysView, Set, Sequence):
+def _view_delitem(self, index):
+    """Remove item at `index` from sorted dict.
+
+    ``view.__delitem__(index)`` <==> ``del view[index]``
+
+    Supports slicing.
+
+    Runtime complexity: `O(log(n))` -- approximate.
+
+    >>> sd = SortedDict({'a': 1, 'b': 2, 'c': 3})
+    >>> view = sd.keys()
+    >>> del view[0]
+    >>> sd
+    SortedDict({'b': 2, 'c': 3})
+    >>> del view[-1]
+    >>> sd
+    SortedDict({'b': 2})
+    >>> del view[:]
+    >>> sd
+    SortedDict({})
+
+    :param index: integer or slice for indexing
+    :raises IndexError: if index out of range
+
     """
-    A KeysView object is a dynamic view of the dictionary's keys, which
-    means that when the dictionary's keys change, the view reflects
-    those changes.
-
-    The KeysView class implements the Set and Sequence Abstract Base Classes.
-    """
-    if hexversion < 0x03000000:
-        def __init__(self, sorted_dict):
-            """
-            Initialize a KeysView from a SortedDict container as *sorted_dict*.
-            """
-            self._list = sorted_dict._list
-            self._view = sorted_dict._dict.keys()
+    _mapping = self._mapping
+    _list = _mapping._list
+    dict_delitem = dict.__delitem__
+    if isinstance(index, slice):
+        keys = _list[index]
+        del _list[index]
+        for key in keys:
+            dict_delitem(_mapping, key)
     else:
-        def __init__(self, sorted_dict):
-            """
-            Initialize a KeysView from a SortedDict container as *sorted_dict*.
-            """
-            self._list = sorted_dict._list
-            self._view = list(sorted_dict._dict.keys())
+        key = _list.pop(index)
+        dict_delitem(_mapping, key)
 
-    def __len__(self):
-        """Return the number of entries in the dictionary."""
-        return len(self._view)
 
-    def __contains__(self, key):
-        """
-        Return True if and only if *key* is one of the underlying dictionary's
-        keys.
-        """
-        return key in self._view
+class SortedKeysView(KeysView, Sequence):
+    """Sorted keys view is a dynamic view of the sorted dict's keys.
 
-    def __iter__(self):
-        """
-        Return an iterable over the keys in the dictionary. Keys are iterated
-        over in their sorted order.
+    When the sorted dict's keys change, the view reflects those changes.
 
-        Iterating views while adding or deleting entries in the dictionary may
-        raise a RuntimeError or fail to iterate over all entries.
-        """
-        return iter(self._list)
+    The keys view implements the set and sequence abstract base classes.
+
+    """
+    __slots__ = ()
+
+
+    @classmethod
+    def _from_iterable(cls, it):
+        return SortedSet(it)
+
 
     def __getitem__(self, index):
-        """Return the key at position *index*."""
-        return self._list[index]
+        """Lookup key at `index` in sorted keys views.
 
-    def __reversed__(self):
+        ``skv.__getitem__(index)`` <==> ``skv[index]``
+
+        Supports slicing.
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> sd = SortedDict({'a': 1, 'b': 2, 'c': 3})
+        >>> skv = sd.keys()
+        >>> skv[0]
+        'a'
+        >>> skv[-1]
+        'c'
+        >>> skv[:]
+        ['a', 'b', 'c']
+        >>> skv[100]
+        Traceback (most recent call last):
+          ...
+        IndexError: list index out of range
+
+        :param index: integer or slice for indexing
+        :return: key or list of keys
+        :raises IndexError: if index out of range
+
         """
-        Return a reversed iterable over the keys in the dictionary. Keys are
-        iterated over in their reverse sort order.
-
-        Iterating views while adding or deleting entries in the dictionary may
-        raise a RuntimeError or fail to iterate over all entries.
-        """
-        return reversed(self._list)
-
-    def index(self, value, start=None, stop=None):
-        """
-        Return the smallest *k* such that `keysview[k] == value` and `start <= k
-        < end`.  Raises `KeyError` if *value* is not present.  *stop* defaults
-        to the end of the set.  *start* defaults to the beginning.  Negative
-        indexes are supported, as for slice indices.
-        """
-        return self._list.index(value, start, stop)
-
-    def count(self, value):
-        """Return the number of occurrences of *value* in the set."""
-        return 1 if value in self._view else 0
-
-    def __eq__(self, that):
-        """Test set-like equality with *that*."""
-        return self._view == that
-
-    def __ne__(self, that):
-        """Test set-like inequality with *that*."""
-        return self._view != that
-
-    def __lt__(self, that):
-        """Test whether self is a proper subset of *that*."""
-        return self._view < that
-
-    def __gt__(self, that):
-        """Test whether self is a proper superset of *that*."""
-        return self._view > that
-
-    def __le__(self, that):
-        """Test whether self is contained within *that*."""
-        return self._view <= that
-
-    def __ge__(self, that):
-        """Test whether *that* is contained within self."""
-        return self._view >= that
-
-    def __and__(self, that):
-        """Return a SortedSet of the intersection of self and *that*."""
-        return SortedSet(self._view & that)
-
-    def __or__(self, that):
-        """Return a SortedSet of the union of self and *that*."""
-        return SortedSet(self._view | that)
-
-    def __sub__(self, that):
-        """Return a SortedSet of the difference of self and *that*."""
-        return SortedSet(self._view - that)
-
-    def __xor__(self, that):
-        """Return a SortedSet of the symmetric difference of self and *that*."""
-        return SortedSet(self._view ^ that)
-
-    if hexversion < 0x03000000:
-        def isdisjoint(self, that):
-            """Return True if and only if *that* is disjoint with self."""
-            return not any(key in self._list for key in that)
-    else:
-        def isdisjoint(self, that):
-            """Return True if and only if *that* is disjoint with self."""
-            return self._view.isdisjoint(that)
-
-    @recursive_repr
-    def __repr__(self):
-        return 'SortedDict_keys({0})'.format(repr(list(self)))
+        return self._mapping._list[index]
 
 
-class ValuesView(AbstractValuesView, Sequence):
+    __delitem__ = _view_delitem
+
+
+class SortedItemsView(ItemsView, Sequence):
+    """Sorted items view is a dynamic view of the sorted dict's items.
+
+    When the sorted dict's items change, the view reflects those changes.
+
+    The items view implements the set and sequence abstract base classes.
+
     """
-    A ValuesView object is a dynamic view of the dictionary's values, which
-    means that when the dictionary's values change, the view reflects those
-    changes.
+    __slots__ = ()
 
-    The ValuesView class implements the Sequence Abstract Base Class.
-    """
-    if hexversion < 0x03000000:
-        def __init__(self, sorted_dict):
-            """
-            Initialize a ValuesView from a SortedDict container as
-            *sorted_dict*.
-            """
-            self._dict = sorted_dict
-            self._list = sorted_dict._list
-            self._view = sorted_dict._dict.values()
-    else:
-        def __init__(self, sorted_dict):
-            """
-            Initialize a ValuesView from a SortedDict container as
-            *sorted_dict*.
-            """
-            self._dict = sorted_dict
-            self._list = sorted_dict._list
-            self._view = list(sorted_dict._dict.values())
 
-    def __len__(self):
-        """Return the number of entries in the dictionary."""
-        return len(self._dict)
+    @classmethod
+    def _from_iterable(cls, it):
+        return SortedSet(it)
 
-    def __contains__(self, value):
-        """
-        Return True if and only if *value* is on the underlying dictionary's
-        values.
-        """
-        return value in self._view
-
-    def __iter__(self):
-        """
-        Return an iterator over the values in the dictionary.  Values are
-        iterated over in sorted order of the keys.
-
-        Iterating views while adding or deleting entries in the dictionary may
-        raise a `RuntimeError` or fail to iterate over all entries.
-        """
-        _dict = self._dict
-        return iter(_dict[key] for key in self._list)
 
     def __getitem__(self, index):
-        """
-        Efficiently return value at *index* in iteration.
+        """Lookup item at `index` in sorted items view.
 
-        Supports slice notation and negative indexes.
+        ``siv.__getitem__(index)`` <==> ``siv[index]``
+
+        Supports slicing.
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> sd = SortedDict({'a': 1, 'b': 2, 'c': 3})
+        >>> siv = sd.items()
+        >>> siv[0]
+        ('a', 1)
+        >>> siv[-1]
+        ('c', 3)
+        >>> siv[:]
+        [('a', 1), ('b', 2), ('c', 3)]
+        >>> siv[100]
+        Traceback (most recent call last):
+          ...
+        IndexError: list index out of range
+
+        :param index: integer or slice for indexing
+        :return: item or list of items
+        :raises IndexError: if index out of range
+
         """
-        _dict, _list = self._dict, self._list
+        _mapping = self._mapping
+        _mapping_list = _mapping._list
+
         if isinstance(index, slice):
-            return [_dict[key] for key in _list[index]]
-        else:
-            return _dict[_list[index]]
+            keys = _mapping_list[index]
+            return [(key, _mapping[key]) for key in keys]
 
-    def __reversed__(self):
-        """
-        Return a reverse iterator over the values in the dictionary.  Values are
-        iterated over in reverse sort order of the keys.
-
-        Iterating views while adding or deleting entries in the dictionary may
-        raise a `RuntimeError` or fail to iterate over all entries.
-        """
-        _dict = self._dict
-        return iter(_dict[key] for key in reversed(self._list))
-
-    def index(self, value):
-        """
-        Return index of *value* in self.
-
-        Raises ValueError if *value* is not found.
-        """
-        for idx, val in enumerate(self):
-            if value == val:
-                return idx
-        else:
-            raise ValueError('{0} is not in dict'.format(repr(value)))
-    def count(self, value):
-        """Return the number of occurrences of *value* in self."""
-        return len([val for val in self._dict.values() if val == value])
-      
-    def __lt__(self, that):
-        raise TypeError
-
-    def __gt__(self, that):
-        raise TypeError
-
-    def __le__(self, that):
-        raise TypeError
-
-    def __ge__(self, that):
-        raise TypeError
-
-    def __and__(self, that):
-        raise TypeError
-
-    def __or__(self, that):
-        raise TypeError
-
-    def __sub__(self, that):
-        raise TypeError
-
-    def __xor__(self, that):
-        raise TypeError
-
-    @recursive_repr
-    def __repr__(self):
-        return 'SortedDict_values({0})'.format(repr(list(self)))
+        key = _mapping_list[index]
+        return key, _mapping[key]
 
 
-class ItemsView(AbstractItemsView, Set, Sequence):
+    __delitem__ = _view_delitem
+
+
+class SortedValuesView(ValuesView, Sequence):
+    """Sorted values view is a dynamic view of the sorted dict's values.
+
+    When the sorted dict's values change, the view reflects those changes.
+
+    The values view implements the sequence abstract base class.
+
     """
-    An ItemsView object is a dynamic view of the dictionary's ``(key,
-    value)`` pairs, which means that when the dictionary changes, the
-    view reflects those changes.
+    __slots__ = ()
 
-    The ItemsView class implements the Set and Sequence Abstract Base Classes.
-    However, the set-like operations (``&``, ``|``, ``-``, ``^``) will only
-    operate correctly if all of the dictionary's values are hashable.
-    """
-    if hexversion < 0x03000000:
-        def __init__(self, sorted_dict):
-            """
-            Initialize an ItemsView from a SortedDict container as
-            *sorted_dict*.
-            """
-            self._dict = sorted_dict
-            self._list = sorted_dict._list
-            self._view = sorted_dict._dict.items()
-    else:
-        def __init__(self, sorted_dict):
-            """
-            Initialize an ItemsView from a SortedDict container as
-            *sorted_dict*.
-            """
-            self._dict = sorted_dict
-            self._list = sorted_dict._list
-            self._view = list(sorted_dict._dict.items())
-
-    def __len__(self):
-        """Return the number of entries in the dictionary."""
-        return len(self._view)
-
-    def __contains__(self, key):
-        """
-        Return True if and only if *key* is one of the underlying dictionary's
-        items.
-        """
-        return key in self._view
-
-    def __iter__(self):
-        """
-        Return an iterable over the items in the dictionary. Items are iterated
-        over in their sorted order.
-
-        Iterating views while adding or deleting entries in the dictionary may
-        raise a RuntimeError or fail to iterate over all entries.
-        """
-        _dict = self._dict
-        return iter((key, _dict[key]) for key in self._list)
 
     def __getitem__(self, index):
-        """Return the item as position *index*."""
-        _dict, _list = self._dict, self._list
+        """Lookup value at `index` in sorted values view.
+
+        ``siv.__getitem__(index)`` <==> ``siv[index]``
+
+        Supports slicing.
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> sd = SortedDict({'a': 1, 'b': 2, 'c': 3})
+        >>> svv = sd.values()
+        >>> svv[0]
+        1
+        >>> svv[-1]
+        3
+        >>> svv[:]
+        [1, 2, 3]
+        >>> svv[100]
+        Traceback (most recent call last):
+          ...
+        IndexError: list index out of range
+
+        :param index: integer or slice for indexing
+        :return: value or list of values
+        :raises IndexError: if index out of range
+
+        """
+        _mapping = self._mapping
+        _mapping_list = _mapping._list
+
         if isinstance(index, slice):
-            return [(key, _dict[key]) for key in _list[index]]
-        else:
-            key = _list[index]
-            return (key, _dict[key])
+            keys = _mapping_list[index]
+            return [_mapping[key] for key in keys]
 
-    def __reversed__(self):
-        """
-        Return a reversed iterable over the items in the dictionary. Items are
-        iterated over in their reverse sort order.
+        key = _mapping_list[index]
+        return _mapping[key]
 
-        Iterating views while adding or deleting entries in the dictionary may
-        raise a RuntimeError or fail to iterate over all entries.
-        """
-        _dict = self._dict
-        return iter((key, _dict[key]) for key in reversed(self._list))
 
-    def index(self, key, start=None, stop=None):
-        """
-        Return the smallest *k* such that `itemssview[k] == key` and `start <= k
-        < end`.  Raises `KeyError` if *key* is not present.  *stop* defaults
-        to the end of the set.  *start* defaults to the beginning.  Negative
-        indexes are supported, as for slice indices.
-        """
-        temp, value = key
-        pos = self._list.index(temp, start, stop)
-        if value == self._dict[temp]:
-            return pos
-        else:
-            raise ValueError('{0} is not in dict'.format(repr(key)))
-
-    def count(self, item):
-        """Return the number of occurrences of *item* in the set."""
-        key, value = item
-        return 1 if key in self._dict and self._dict[key] == value else 0
-
-    def __eq__(self, that):
-        """Test set-like equality with *that*."""
-        return self._view == that
-
-    def __ne__(self, that):
-        """Test set-like inequality with *that*."""
-        return self._view != that
-
-    def __lt__(self, that):
-        """Test whether self is a proper subset of *that*."""
-        return self._view < that
-
-    def __gt__(self, that):
-        """Test whether self is a proper superset of *that*."""
-        return self._view > that
-
-    def __le__(self, that):
-        """Test whether self is contained within *that*."""
-        return self._view <= that
-
-    def __ge__(self, that):
-        """Test whether *that* is contained within self."""
-        return self._view >= that
-
-    def __and__(self, that):
-        """Return a SortedSet of the intersection of self and *that*."""
-        return SortedSet(self._view & that)
-
-    def __or__(self, that):
-        """Return a SortedSet of the union of self and *that*."""
-        return SortedSet(self._view | that)
-
-    def __sub__(self, that):
-        """Return a SortedSet of the difference of self and *that*."""
-        return SortedSet(self._view - that)
-
-    def __xor__(self, that):
-        """Return a SortedSet of the symmetric difference of self and *that*."""
-        return SortedSet(self._view ^ that)
-
-    if hexversion < 0x03000000:
-        def isdisjoint(self, that):
-            """Return True if and only if *that* is disjoint with self."""
-            _dict = self._dict
-            for key, value in that:
-                if key in _dict and _dict[key] == value:
-                    return False
-            return True
-    else:
-        def isdisjoint(self, that):
-            """Return True if and only if *that* is disjoint with self."""
-            return self._view.isdisjoint(that)
-
-    @recursive_repr
-    def __repr__(self):
-        return 'SortedDict_items({0})'.format(repr(list(self)))
+    __delitem__ = _view_delitem

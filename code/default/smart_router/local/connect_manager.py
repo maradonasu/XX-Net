@@ -99,10 +99,12 @@ class ConnectManager(object):
 
     def create_connect(self, queue, host, ip, port, timeout=5):
         ip = utils.to_bytes(ip)
+        ip_text = utils.to_str(ip)
+        family = socket.AF_INET6 if ":" in ip_text else socket.AF_INET
         if int(g.config.PROXY_ENABLE):
-            sock = socks.socksocket(socket.AF_INET if b':' not in ip else socket.AF_INET6)
+            sock = socks.socksocket(family)
         else:
-            sock = socket.socket(socket.AF_INET if b':' not in ip else socket.AF_INET6)
+            sock = socket.socket(family)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # set struct linger{l_onoff=1,l_linger=0} to avoid 10048 socket error
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
@@ -115,7 +117,7 @@ class ConnectManager(object):
 
         start_time = time.time()
         try:
-            sock.connect((ip, port))
+            sock.connect((ip_text, port))
             time_cost = (time.time() - start_time) * 1000
             # xlog.debug("connect %s %s:%d time:%d", host, ip, port, time_cost)
             g.ip_cache.update_connect_time(ip, port, time_cost)

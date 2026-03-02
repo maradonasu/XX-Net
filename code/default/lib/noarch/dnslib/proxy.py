@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
-
+from __future__ import print_function
 
 import binascii,socket,struct
 
-from dnslib import DNSRecord
+from dnslib import DNSRecord,RCODE,QTYPE
 from dnslib.server import DNSServer,DNSHandler,BaseResolver,DNSLogger
 
 class ProxyResolver(BaseResolver):
@@ -29,16 +29,29 @@ class ProxyResolver(BaseResolver):
 
     """
 
-    def __init__(self,address,port):
+    def __init__(self,address,port,timeout=0,strip_aaaa=False):
         self.address = address
         self.port = port
+        self.timeout = timeout
+        self.strip_aaaa = strip_aaaa
 
     def resolve(self,request,handler):
-        if handler.protocol == 'udp':
-            proxy_r = request.send(self.address,self.port)
-        else:
-            proxy_r = request.send(self.address,self.port,tcp=True)
-        reply = DNSRecord.parse(proxy_r)
+        try:
+            if self.strip_aaaa and request.q.qtype == QTYPE.AAAA:
+                reply = request.reply()
+                reply.header.rcode = RCODE.NXDOMAIN
+            else:
+                if handler.protocol == 'udp':
+                    proxy_r = request.send(self.address,self.port,
+                                    timeout=self.timeout)
+                else:
+                    proxy_r = request.send(self.address,self.port,
+                                    tcp=True,timeout=self.timeout)
+                reply = DNSRecord.parse(proxy_r)
+        except socket.timeout:
+            reply = request.reply()
+            reply.header.rcode = getattr(RCODE,'NXDOMAIN')
+
         return reply
 
 class PassthroughDNSHandler(DNSHandler):
@@ -52,7 +65,7 @@ class PassthroughDNSHandler(DNSHandler):
         host,port = self.server.resolver.address,self.server.resolver.port
 
         request = DNSRecord.parse(data)
-        self.log_request(request)
+        self.server.logger.log_request(self,request)
 
         if self.protocol == 'tcp':
             data = struct.pack("!H",len(data)) + data
@@ -62,7 +75,7 @@ class PassthroughDNSHandler(DNSHandler):
             response = send_udp(data,host,port)
 
         reply = DNSRecord.parse(response)
-        self.log_reply(reply)
+        self.server.logger.log_reply(self,reply)
 
         return response
 
@@ -71,25 +84,33 @@ def send_tcp(data,host,port):
         Helper function to send/receive DNS TCP request
         (in/out packets will have prepended TCP length header)
     """
-    sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    sock.connect((host,port))
-    sock.sendall(data)
-    response = sock.recv(8192)
-    length = struct.unpack("!H",bytes(response[:2]))[0]
-    while len(response) - 2 < length:
-        response += sock.recv(8192)
-    sock.close()
-    return response
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        sock.connect((host,port))
+        sock.sendall(data)
+        response = sock.recv(8192)
+        length = struct.unpack("!H",bytes(response[:2]))[0]
+        while len(response) - 2 < length:
+            response += sock.recv(8192)
+        return response
+    finally:
+        if (sock is not None):
+            sock.close()
 
 def send_udp(data,host,port):
     """
         Helper function to send/receive DNS UDP request
     """
-    sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-    sock.sendto(data,(host,port))
-    response,server = sock.recvfrom(8192)
-    sock.close()
-    return response
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        sock.sendto(data,(host,port))
+        response,server = sock.recvfrom(8192)
+        return response
+    finally:
+        if (sock is not None):
+            sock.close()
 
 if __name__ == '__main__':
 
@@ -107,6 +128,11 @@ if __name__ == '__main__':
                     help="Upstream DNS server:port (default:8.8.8.8:53)")
     p.add_argument("--tcp",action='store_true',default=False,
                     help="TCP proxy (default: UDP only)")
+    p.add_argument("--timeout","-o",type=float,default=5,
+                    metavar="<timeout>",
+                    help="Upstream timeout (default: 5s)")
+    p.add_argument("--strip-aaaa",action='store_true',default=False,
+                    help="Retuen NXDOMAIN for AAAA queries (default: off)")
     p.add_argument("--passthrough",action='store_true',default=False,
                     help="Dont decode/re-encode request/response (default: off)")
     p.add_argument("--log",default="request,reply,truncated,error",
@@ -123,9 +149,9 @@ if __name__ == '__main__':
                         args.dns,args.dns_port,
                         "UDP/TCP" if args.tcp else "UDP"))
 
-    resolver = ProxyResolver(args.dns,args.dns_port)
+    resolver = ProxyResolver(args.dns,args.dns_port,args.timeout,args.strip_aaaa)
     handler = PassthroughDNSHandler if args.passthrough else DNSHandler
-    logger = DNSLogger(args.log,args.log_prefix)
+    logger = DNSLogger(args.log,prefix=args.log_prefix)
     udp_server = DNSServer(resolver,
                            port=args.port,
                            address=args.address,

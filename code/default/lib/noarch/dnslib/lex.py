@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
-
+from __future__ import print_function
 
 import collections,string
 
 try:
-    from io import StringIO
+    from StringIO import StringIO
 except ImportError:
     from io import StringIO
 
@@ -145,7 +145,7 @@ class WordLexer(Lexer):
         To emit SPACE tokens: self.spacetok = ('SPACE',None)
         To emit NL tokens: self.nltok = ('NL',None)
 
-        >>> l = WordLexer(r'abc "def\100\x3d\. ghi" jkl')
+        >>> l = WordLexer(r'abc "def\100\x3d\\. ghi" jkl')
         >>> list(l)
         [('ATOM', 'abc'), ('ATOM', 'def@=. ghi'), ('ATOM', 'jkl')]
         >>> l = WordLexer(r"1 '2 3 4' 5")
@@ -186,7 +186,6 @@ class WordLexer(Lexer):
                 return tok(self.lexQuote)
             elif c in self.wordchars:
                 return tok(self.lexWord)
-                return (self.spacetok,self.lexWord)
             elif c:
                 raise ValueError("Invalid input [%d]: %s" % (
                                         self.f.tell(),c))
@@ -348,7 +347,7 @@ if __name__ == '__main__':
         try:
             # Test if we have /dev/urandom
             open("/dev/urandom")
-            doctest.testmod()
+            sys.exit(0 if doctest.testmod().failed == 0 else 1)
         except IOError:
             # Don't run stream test
             doctest.run_docstring_examples(Lexer, globals())

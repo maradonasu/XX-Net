@@ -1,12 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding:utf-8
 
 import os
 
-try:
-    from urllib.parse import urlparse, parse_qs
-except ImportError:
-    from urlparse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs
 
 from xlog import getLogger
 xlog = getLogger("smart_router")

@@ -18,7 +18,6 @@ from .upload_logs import upload_logs_thread
 current_path = os.path.dirname(os.path.abspath(__file__))
 root_path = os.path.abspath(os.path.join(current_path, os.pardir, os.pardir))
 
-
 def encrypt_data(data):
     if g.config.encrypt_data:
         return encrypt.Encryptor(g.config.encrypt_password, g.config.encrypt_method).encrypt(data)
@@ -164,12 +163,15 @@ class ProxySession(object):
             return True
 
     def timeout_checker(self):
+        check_interval = 2
         while self.running:
             timeout_num = 0
+            time_now = time.time()
+            timeout_threshold = time_now - g.config.send_timeout_retry
+            
             with self.lock:
-                time_now = time.time()
-                for sn, data_info in self.transfer_list.items():
-                    if data_info["stat"] != "timeout" and time_now - (data_info["start_time"] + data_info["server_timeout"]) > g.config.send_timeout_retry:
+                for sn, data_info in list(self.transfer_list.items()):
+                    if data_info["stat"] != "timeout" and data_info["start_time"] + data_info["server_timeout"] < timeout_threshold:
                         data_info["stat"] = "timeout"
                         xlog.warn("timeout_checker found transfer_no:%d timeout:%f", sn, time_now - data_info["start_time"])
                         timeout_num += 1
@@ -179,7 +181,7 @@ class ProxySession(object):
                     min(g.config.concurent_thread_num - g.config.min_on_road, self.target_on_roads + timeout_num)
                 self.trigger_more()
 
-            time.sleep(1)
+            time.sleep(check_interval)
 
     def traffic_speed_calculation(self):
         now = time.time()
@@ -698,7 +700,8 @@ class ProxySession(object):
                 if data_info["stat"] == "timeout":
                     continue
 
-                if data_info["server_received"] == False and server_local_time - data_info["start_time"] > g.config.send_timeout_retry:
+                if data_info["server_received"] == False and \
+                        server_local_time - data_info["start_time"] > g.config.send_timeout_retry:
                     data_info["stat"] = "timeout"
                     xlog.warn("check_upload_not_acked found transfer_no:%d upload timeout:%f", no,
                               server_local_time - data_info["start_time"])
@@ -869,7 +872,6 @@ class ProxySession(object):
             send_ack = data_info["send_ack"]
             download_timeout = data_info["download_timeout"]
 
-            # Generate upload data package
             send_data_len = len(send_data)
             send_ack_len = len(send_ack)
             download_timeout_len = len(download_timeout)
@@ -878,7 +880,6 @@ class ProxySession(object):
                     g.config.concurent_thread_num - self.on_road_num < g.config.min_on_road or \
                     self.server_time_deviation > g.config.server_time_max_deviation or \
                     data_info["stat"] == "retry":
-                # xlog.debug("pool_size:%s waiters:%d", self.send_buffer.pool_size, len(self.wait_queue.waiters))
                 server_timeout = 0
             else:
                 server_timeout = g.config.roundtrip_timeout
@@ -889,7 +890,6 @@ class ProxySession(object):
                     return
 
                 self.on_road_num += 1
-                # xlog.debug(f"worker: {work_id} on_road_num plus: {self.on_road_num}")
                 self.transfer_list[transfer_no]["server_timeout"] = server_timeout
 
         magic = b"P"
@@ -915,6 +915,12 @@ class ProxySession(object):
         # Use one time loop for easy quit and clean up.
         for _ in range(1):
             upload_post_data2 = bytearray(upload_post_data)
+            request_timeout = server_timeout + g.config.network_timeout
+            if send_data_len > 0:
+                # Upload-bearing requests are already considered retryable after
+                # send_timeout_retry. Don't keep a worker blocked for the full
+                # long-poll timeout on a request that may already have been retried.
+                request_timeout = min(request_timeout, g.config.send_timeout_retry + g.config.network_timeout)
             try:
                 content, status, response = g.http_client.request(method="POST", host=g.server_host,
                                                                   path="/data?tid=%d" % transfer_no,
@@ -922,7 +928,7 @@ class ProxySession(object):
                                                                   headers={
                                                                       "Content-Length": str(len(upload_post_data2)),
                                                                   },
-                                                                  timeout=server_timeout + g.config.network_timeout)
+                                                                  timeout=request_timeout)
 
                 traffic = len(upload_post_data2) + len(content) + 645
                 self.traffic_upload += len(upload_post_data2) + 645

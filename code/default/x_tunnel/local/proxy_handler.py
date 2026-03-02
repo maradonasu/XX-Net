@@ -1,11 +1,12 @@
+#!/usr/bin/env python3
+# coding:utf-8
+
 import time
 import socket
 import struct
+import select
 
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+from urllib.parse import urlparse
 
 import utils
 from xlog import getLogger
@@ -14,6 +15,9 @@ xlog = getLogger("x_tunnel")
 from . import global_var as g
 from . import proxy_session
 from . import openai_handler
+
+POLL_TIMEOUT = 0.1
+READ_TIMEOUT = 30
 
 
 def netloc_to_host_port(netloc, default_port=80):
@@ -68,112 +72,76 @@ class Socks5Server():
             xlog.exception("proxy handler err:%r", e)
             self.connection.close()
 
+    def _recv_with_timeout(self, size=8192, timeout=READ_TIMEOUT):
+        sock = self.connection
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            try:
+                ready, _, _ = select.select([sock], [], [], POLL_TIMEOUT)
+                if ready:
+                    return sock.recv(size)
+            except socket.error as e:
+                if e.errno not in [2, 11, 10035]:
+                    raise e
+            time.sleep(0.001)
+        raise socket.error("recv timeout")
+
     def read_null_end_line(self):
         sock = self.connection
-        sock.setblocking(0)
-        try:
-            while True:
-                n1 = self.read_buffer.find(b"\x00", self.buffer_start)
-                if n1 > -1:
-                    line = self.read_buffer[self.buffer_start:n1]
-                    self.buffer_start = n1 + 1
-                    return line
+        while True:
+            n1 = self.read_buffer.find(b"\x00", self.buffer_start)
+            if n1 > -1:
+                line = self.read_buffer[self.buffer_start:n1]
+                self.buffer_start = n1 + 1
+                return line
 
-                try:
-                    data = sock.recv(8192)
-                except socket.error as e:
-                    # logging.exception("e:%r", e)
-                    if e.errno in [2, 11, 10035]:
-                        time.sleep(0.01)
-                        continue
-                    else:
-                        raise e
-
-                self.read_buffer += data
-        finally:
-            sock.setblocking(1)
+            data = self._recv_with_timeout()
+            if not data:
+                raise socket.error("recv fail")
+            self.read_buffer += data
 
     def read_crlf_line(self):
-        sock = self.connection
-        sock.setblocking(0)
-        try:
-            while True:
-                n1 = self.read_buffer.find(b"\r\n", self.buffer_start)
-                if n1 > -1:
-                    line = self.read_buffer[self.buffer_start:n1]
-                    self.buffer_start = n1 + 2
-                    return line
+        while True:
+            n1 = self.read_buffer.find(b"\r\n", self.buffer_start)
+            if n1 > -1:
+                line = self.read_buffer[self.buffer_start:n1]
+                self.buffer_start = n1 + 2
+                return line
 
-                try:
-                    data = sock.recv(8192)
-                except socket.error as e:
-                    # logging.exception("e:%r", e)
-                    if e.errno in [2, 11, 10035]:
-                        time.sleep(0.01)
-                        continue
-                    else:
-                        raise e
-
-                self.read_buffer += data
-        finally:
-            sock.setblocking(1)
+            data = self._recv_with_timeout()
+            if not data:
+                raise socket.error("recv fail")
+            self.read_buffer += data
 
     def read_headers(self):
-        sock = self.connection
-        sock.setblocking(0)
-        try:
-            while True:
-                if self.read_buffer[self.buffer_start:] == b"\r\n":
-                    self.buffer_start += 2
-                    return b""
+        while True:
+            if len(self.read_buffer) > self.buffer_start and self.read_buffer[self.buffer_start:] == b"\r\n":
+                self.buffer_start += 2
+                return b""
 
-                n1 = self.read_buffer.find(b"\r\n\r\n", self.buffer_start)
-                if n1 > -1:
-                    block = self.read_buffer[self.buffer_start:n1]
-                    self.buffer_start = n1 + 4
-                    return block
+            n1 = self.read_buffer.find(b"\r\n\r\n", self.buffer_start)
+            if n1 > -1:
+                block = self.read_buffer[self.buffer_start:n1]
+                self.buffer_start = n1 + 4
+                return block
 
-                try:
-                    data = sock.recv(8192)
-                except socket.error as e:
-                    # logging.exception("e:%r", e)
-                    if e.errno in [2, 11, 10035]:
-                        time.sleep(0.01)
-                        continue
-                    else:
-                        raise e
-
-                self.read_buffer += data
-        finally:
-            sock.setblocking(1)
+            data = self._recv_with_timeout()
+            if not data:
+                raise socket.error("recv fail")
+            self.read_buffer += data
 
     def read_bytes(self, size):
-        sock = self.connection
-        sock.setblocking(1)
-        try:
-            while True:
-                left = len(self.read_buffer) - self.buffer_start
-                if left >= size:
-                    break
+        while True:
+            left = len(self.read_buffer) - self.buffer_start
+            if left >= size:
+                break
 
-                need = size - left
-
-                try:
-                    data = sock.recv(need)
-                except socket.error as e:
-                    # logging.exception("e:%r", e)
-                    if e.errno in [2, 11, 10035]:
-                        time.sleep(0.01)
-                        continue
-                    else:
-                        raise e
-
-                if len(data):
-                    self.read_buffer += data
-                else:
-                    raise socket.error("recv fail")
-        finally:
-            sock.setblocking(1)
+            need = size - left
+            data = self._recv_with_timeout(need)
+            if data:
+                self.read_buffer += data
+            else:
+                raise socket.error("recv fail")
 
         data = self.read_buffer[self.buffer_start:self.buffer_start + size]
         self.buffer_start += size

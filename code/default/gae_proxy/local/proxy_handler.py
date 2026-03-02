@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding:utf-8
 
 
@@ -46,10 +46,7 @@ except:
     NetWorkIOError = (socket.error, ssl.SSLError, OSError)
 
 
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+from urllib.parse import urlparse
 
 from xlog import getLogger
 xlog = getLogger("gae_proxy")

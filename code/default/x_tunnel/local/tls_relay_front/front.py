@@ -110,6 +110,11 @@ class Front(object):
             logger.debug("%s %s%s send:%d recv:%d trace:%s", method, host, path, len(data), len(content),
                        response.task.get_trace())
         else:
+            if status in self.config.http2_status_to_close and getattr(response, "worker", None):
+                try:
+                    self.ip_manager.report_bad_response(response.worker.ip_str, status, path)
+                except Exception as e:
+                    logger.debug("report_bad_response %s status:%d fail:%r", host, status, e)
             logger.warn("%s %s%s status:%d trace:%s", method, host, path, status,
                        response.task.get_trace())
         return content, status, response

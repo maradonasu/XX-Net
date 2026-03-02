@@ -14,9 +14,9 @@ class Config(ConfigBase):
         self.set_var("dispather_min_idle_workers", 0)
         self.set_var("dispather_work_min_idle_time", 0)
         self.set_var("dispather_work_max_score", 1)
+        self.set_var("dispather_score_factor", 3)
         self.set_var("dispather_min_workers", 1)
         self.set_var("dispather_max_workers", 1)
-        self.set_var("dispather_score_factor", 1)
 
         # http 2 worker
         self.set_var("http2_status_to_close", [302, 400, 403, 404, 405])

@@ -4,19 +4,23 @@
     Bimap - bidirectional mapping between code/value
 """
 
+import sys,types
+
 class BimapError(Exception):
     pass
 
 class Bimap(object):
 
     """
-        Bi-directional mapping between code/value.
+        Bi-directional mapping between code/text.
 
         Initialised using:
 
             name:   Used for exceptions
-            dict:   Dict mapping from value (numeric) to code (text)
+            dict:   Dict mapping from code (numeric) to text
             error:  Error type to raise if key not found
+                    _or_ callable which either generates mapping
+                    return error
 
         The class provides:
 
@@ -47,9 +51,41 @@ class Bimap(object):
         >>> TEST.get(99)
         '99'
 
+        # Test with callable error
+        >>> def _error(name,key,forward):
+        ...     if forward:
+        ...         try:
+        ...             return "TEST%d" % (key,)
+        ...         except:
+        ...             raise TestError("%s: Invalid forward lookup: [%s]" % (name,key))
+        ...     else:
+        ...         if key.startswith("TEST"):
+        ...             try:
+        ...                 return int(key[4:])
+        ...             except:
+        ...                 pass
+        ...         raise TestError("%s: Invalid reverse lookup: [%s]" % (name,key))
+        >>> TEST2 = Bimap('TEST2',{1:'A', 2:'B', 3:'C'},_error)
+        >>> TEST2[1]
+        'A'
+        >>> TEST2[9999]
+        'TEST9999'
+        >>> TEST2['abcd']
+        Traceback (most recent call last):
+        ...
+        TestError: TEST2: Invalid forward lookup: [abcd]
+        >>> TEST2.A
+        1
+        >>> TEST2.TEST9999
+        9999
+        >>> TEST2.X
+        Traceback (most recent call last):
+        ...
+        TestError: TEST2: Invalid reverse lookup: [X]
+
     """
 
-    def __init__(self,name,forward,error=KeyError):
+    def __init__(self,name,forward,error=AttributeError):
         self.name = name
         self.error = error
         self.forward = forward.copy()
@@ -65,14 +101,23 @@ class Bimap(object):
         try:
             return self.forward[k]
         except KeyError as e:
-            raise self.error("%s: Invalid forward lookup: [%s]" % (self.name,k))
+            if isinstance(self.error,types.FunctionType):
+                return self.error(self.name,k,True)
+            else:
+                raise self.error("%s: Invalid forward lookup: [%s]" % (self.name,k))
 
     def __getattr__(self,k):
         try:
+            # Python 3.7 inspect module (called by doctest) checks for __wrapped__ attribute
+            if k == "__wrapped__":
+                raise AttributeError()
             return self.reverse[k]
         except KeyError as e:
-            raise self.error("%s: Invalid reverse lookup: [%s]" % (self.name,k))
+            if isinstance(self.error,types.FunctionType):
+                return self.error(self.name,k,False)
+            else:
+                raise self.error("%s: Invalid reverse lookup: [%s]" % (self.name,k))
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    import doctest,sys
+    sys.exit(0 if doctest.testmod().failed == 0 else 1)

@@ -91,6 +91,14 @@ class IpManager(IpManagerBase):
             info["links"] -= 1
         self.logger.debug("ip %s connect fail:%s", ip, reason)
 
+    def report_bad_response(self, ip_str, status, reason=""):
+        ip, _ = utils.get_ip_port(ip_str)
+        ip = utils.to_str(ip)
+        info = self._get_ip_info(ip)
+        info["fail_times"] += 1
+        info["last_try"] = time.time()
+        self.logger.debug("ip %s bad response status:%s reason:%s", ip, status, reason)
+
     def report_connect_closed(self, ip_str, sni=None, reason=""):
         try:
             ip, _ = utils.get_ip_port(ip_str)

@@ -3,11 +3,16 @@ import threading
 import os
 import random
 from threading import Lock
+from collections import defaultdict
 
 all_fronts = []
 light_fronts = []
 session_fronts = []
 cloudflare_front = None
+_front_fail_counts = defaultdict(int)
+_front_last_fail_time = defaultdict(float)
+FRONT_FAIL_BASE_PENALTY = 1000
+FRONT_PENALTY_DECAY_SECONDS = 30
 
 from . import global_var as g
 import utils
@@ -98,26 +103,41 @@ def front_staticstic_thread():
 
 get_front_lock = Lock()
 
+def _get_front_penalty(front):
+    fail_count = _front_fail_counts[front.name]
+    if fail_count == 0:
+        return 0
+    
+    last_fail = _front_last_fail_time[front.name]
+    time_since_fail = time.time() - last_fail
+    
+    decay_factor = max(0, 1.0 - (time_since_fail / FRONT_PENALTY_DECAY_SECONDS))
+    return int(fail_count * FRONT_FAIL_BASE_PENALTY * decay_factor)
+
+def _record_front_success(front):
+    _front_fail_counts[front.name] = 0
+
+def _record_front_fail(front):
+    _front_fail_counts[front.name] += 1
+    _front_last_fail_time[front.name] = time.time()
+
 def get_front(host, timeout):
-    start_time = time.time()
+    start_time = time.monotonic()
     if host in ["dns.xx-net.org", g.config.api_server]:
         fronts = light_fronts
     else:
         fronts = session_fronts
 
     with get_front_lock:
-        while time.time() - start_time < timeout:
+        while time.monotonic() - start_time < timeout:
             best_front = None
             best_score = 999999999
             for front in fronts:
                 if host == "dns.xx-net.org" and front == cloudflare_front and g.server_host:
-                    # share the x-tunnel connection with dns.xx-net.org
-                    # x-tunnel server will forward the request to dns.xx-net.org
                     host = g.server_host
 
                 dispatcher = front.get_dispatcher(host)
                 if not dispatcher:
-                    # xlog.warn("get dispatcher from %s fail for %s", front.name, host)
                     continue
 
                 score = dispatcher.get_score()
@@ -126,6 +146,8 @@ def get_front(host, timeout):
                         xlog.warn("get_front get_score failed for %s ", front.name)
                     continue
 
+                score += _get_front_penalty(front)
+
                 if score < best_score:
                     best_score = score
                     best_front = front
@@ -133,7 +155,10 @@ def get_front(host, timeout):
             if best_front is not None:
                 return best_front
 
-            time.sleep(0.005)
+            remaining = timeout - (time.monotonic() - start_time)
+            if remaining <= 0:
+                break
+            time.sleep(min(0.005, remaining))
 
     g.stat["timeout_roundtrip"] += 5
     return None
@@ -156,25 +181,26 @@ def count_connection(host):
 
 
 def request(method, host, path="/", headers={}, data="", timeout=100):
-    # xlog.debug("front request %s timeout:%d", path, timeout)
-    start_time = time.time()
+    start_time = time.monotonic()
 
     content, status, response = "", 603, {}
-    while time.time() - start_time < timeout:
-        start_get_front = time.time()
-        front = get_front(host, timeout)
+    while time.monotonic() - start_time < timeout:
+        remaining_timeout = timeout - (time.monotonic() - start_time)
+        if remaining_timeout <= 0:
+            break
+
+        start_get_front = time.monotonic()
+        front = get_front(host, remaining_timeout)
         if not front:
             xlog.warn("get_front fail")
             return "", 602, {}
 
-        finished_get_front = time.time()
+        finished_get_front = time.monotonic()
         get_front_time = finished_get_front - start_get_front
         if get_front_time > 0.1:
             xlog.warn("get_front_time: %f for %s %s %s", get_front_time, method, host, path)
 
         if host == "dns.xx-net.org" and front == cloudflare_front and g.server_host:
-            # share the x-tunnel connection with dns.xx-net.org
-            # x-tunnel server will forward the request to dns.xx-net.org
             if g.server_host:
                 host = g.server_host
 
@@ -183,20 +209,33 @@ def request(method, host, path="/", headers={}, data="", timeout=100):
             padding = utils.to_str(utils.generate_random_lowercase(random.randint(8, 64)))
             headers["Padding"] = padding
 
+        request_timeout = timeout - (time.monotonic() - start_time)
+        if request_timeout <= 0:
+            break
+
         content, status, response = front.request(
-            method, host=host, path=path, headers=dict(headers), data=data, timeout=timeout)
+            method, host=host, path=path, headers=dict(headers), data=data, timeout=request_timeout)
 
         if status not in [200, 521, 400, 404]:
             xlog.warn("front retry %s%s", host, path)
-            time.sleep(1)
+            _record_front_fail(front)
+            remaining_timeout = timeout - (time.monotonic() - start_time)
+            if remaining_timeout <= 0:
+                break
+            time.sleep(min(0.5, remaining_timeout))
             continue
 
         header_len = int(response.headers.get(b"Content-Length", 0))
         if header_len and len(content) != header_len:
             xlog.warn("response length incorrect, head len:%s, content len:%d retry it", header_len, len(content))
-            time.sleep(1)
+            _record_front_fail(front)
+            remaining_timeout = timeout - (time.monotonic() - start_time)
+            if remaining_timeout <= 0:
+                break
+            time.sleep(min(0.5, remaining_timeout))
             continue
 
+        _record_front_success(front)
         return content, status, response
 
     return content, status, response
@@ -214,6 +253,7 @@ def set_session_host(host):
 
 def stop():
     global all_fronts, light_fronts, session_fronts, cloudflare_front
+    global _front_fail_counts, _front_last_fail_time
 
     for front in all_fronts:
         front.stop()
@@ -222,3 +262,5 @@ def stop():
     light_fronts = []
     session_fronts = []
     cloudflare_front = None
+    _front_fail_counts.clear()
+    _front_last_fail_time.clear()

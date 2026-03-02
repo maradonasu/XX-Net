@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding:utf-8
 
 import os, sys
@@ -8,25 +8,13 @@ import socket, ssl
 import time
 import threading
 import json
-import cgi
+import cgi_compat as cgi
 import traceback
 import base64
 
-try:
-    from urllib.parse import urlparse, urlencode, parse_qs
-    from urllib.request import urlopen, Request
-    from urllib.error import HTTPError
-except ImportError:
-    from urlparse import urlparse, parse_qs
-    from urllib import urlencode
-    from urllib2 import urlopen, Request, HTTPError
-
-try:
-    from urllib.request import ProxyHandler
-    from urllib.request import build_opener
-except ImportError:
-    from urllib2 import ProxyHandler
-    from urllib2 import build_opener
+from urllib.parse import urlparse, urlencode, parse_qs
+from urllib.request import urlopen, Request, ProxyHandler, build_opener
+from urllib.error import HTTPError
 
 
 current_path = os.path.dirname(os.path.abspath(__file__))
@@ -36,6 +24,7 @@ if __name__ == "__main__":
     sys.path.append(noarch_lib)
 
 
+import py3_compat
 import sys_platform
 from xlog import getLogger, keep_log
 
@@ -138,6 +127,7 @@ class Http_Handler(simple_http_server.HttpServerHandler):
             content_type = self.headers.get('Content-Type', "")
             ctype, pdict = cgi.parse_header(content_type)
             if ctype == 'multipart/form-data':
+                pdict["CONTENT-LENGTH"] = self.headers.get('Content-Length', "0")
                 self.postvars = cgi.parse_multipart(self.rfile, pdict)
             elif ctype == 'application/x-www-form-urlencoded':
                 length = int(self.headers.get('Content-Length'))

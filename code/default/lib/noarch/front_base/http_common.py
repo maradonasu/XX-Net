@@ -330,3 +330,21 @@ class HttpWorker(object):
                 return False
         else:
             return False
+
+    def is_active_timeout(self, task_timeout=0):
+        if self.version == "1.1" or not self.keep_running:
+            return False
+
+        # HTTP/2 may timeout at the task layer while the connection is still
+        # actively receiving data for other streams. In that case, avoid
+        # treating it as a terminal worker failure.
+        active_streams = len(self.streams)
+        if active_streams <= 1:
+            return False
+
+        if task_timeout:
+            active_window = min(max(task_timeout, 1), self.config.http2_idle_ping_min_interval)
+        else:
+            active_window = self.config.http2_idle_ping_min_interval
+
+        return time.time() - self.last_recv_time < active_window

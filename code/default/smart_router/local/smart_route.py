@@ -1,13 +1,13 @@
+#!/usr/bin/env python3
+# coding:utf-8
+
 import time
 import socket
 import struct
 import io
 import ssl
 
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+from urllib.parse import urlparse
 
 import utils
 import simple_http_server

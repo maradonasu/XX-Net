@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# coding:utf-8
 
 from config import config
 import os
@@ -9,10 +10,7 @@ import sys
 import time
 import zipfile
 
-try:
-    from urllib.request import build_opener, ProxyHandler
-except ImportError:
-    from urllib2 import build_opener, ProxyHandler
+from urllib.request import build_opener, ProxyHandler
 
 import env_info
 from xlog import getLogger

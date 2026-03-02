@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
-
+from __future__ import print_function
 
 try:
     from subprocess import getoutput
 except ImportError:
-    from subprocess import getoutput
+    from commands import getoutput
 
 from dnslib import RR,QTYPE,RCODE,TXT,parse_time
 from dnslib.label import DNSLabel
@@ -83,14 +83,14 @@ if __name__ == '__main__':
     args = p.parse_args()
 
     resolver = ShellResolver(args.map,args.origin,args.ttl)
-    logger = DNSLogger(args.log,args.log_prefix)
+    logger = DNSLogger(args.log,prefix=args.log_prefix)
 
     print("Starting Shell Resolver (%s:%d) [%s]" % (
                         args.address or "*",
                         args.port,
                         "UDP/TCP" if args.tcp else "UDP"))
 
-    for route,cmd in list(resolver.routes.items()):
+    for route,cmd in resolver.routes.items():
         print("    | ",route,"-->",cmd)
     print()
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (c) 2014 clowwindy
 #
@@ -64,7 +64,7 @@ def numpy_xor(a, b):
     ab = numpy.frombuffer(a, dtype=dtype)
     bb = numpy.frombuffer(b, dtype=dtype)
     c = numpy.bitwise_xor(ab, bb)
-    r = c.tostring()
+    r = c.tobytes()
     return r
 
 

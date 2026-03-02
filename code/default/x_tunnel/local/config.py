@@ -49,32 +49,33 @@ def load_config():
     config.set_var("update_cloudflare_domains", True)
 
     # performance parameters
-    # range 2 - 100
-    config.set_var("concurent_thread_num", 20)
+    # range 2 - 100, reduced from 20 to 12 for lower thread pressure
+    config.set_var("concurent_thread_num", 12)
 
     # min roundtrip on road if connectoin exist
-    config.set_var("min_on_road", 3)
+    config.set_var("min_on_road", 2)
 
     config.set_var("server_time_max_deviation", 0.6)
 
-    config.set_var("send_timeout_retry", 4)
+    # reduced from 4 to 3 for faster retry
+    config.set_var("send_timeout_retry", 3)
 
-    config.set_var("server_download_timeout_retry", 4)
+    config.set_var("server_download_timeout_retry", 3)
 
-    # range 1 - 1000, ms
-    config.set_var("send_delay", 10)
+    # range 1 - 1000, ms, reduced from 10 to 5 for faster upload
+    config.set_var("send_delay", 5)
 
-    # range 1 - 20000, ms
-    config.set_var("resend_timeout", 5000)
+    # range 1 - 20000, ms, reduced from 5000 to 3000 for faster recovery
+    config.set_var("resend_timeout", 3000)
 
-    # range 1 - resend_timeout, ms
-    config.set_var("ack_delay", 300)
+    # range 1 - resend_timeout, ms, reduced from 300 to 150 for faster ack
+    config.set_var("ack_delay", 150)
 
     # max 10M
     config.set_var("max_payload", 256 * 1024)
 
-    # range 1 - 30
-    config.set_var("roundtrip_timeout", 25)
+    # range 1 - 30, reduced from 25 to 20 for faster timeout detection
+    config.set_var("roundtrip_timeout", 20)
 
     config.set_var("network_timeout", 5)
 

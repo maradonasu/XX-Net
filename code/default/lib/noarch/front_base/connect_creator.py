@@ -54,18 +54,18 @@ class ConnectCreator(object):
             self.logger.debug("connect ip:%s sni:%s host:%s", ip_str, sni, host)
 
         ip, port = utils.get_ip_port(ip_str)
-        if isinstance(ip, str):
-            ip = utils.to_bytes(ip)
+        ip_text = utils.to_str(ip)
 
         if openssl_wrap.implementation == "UTLS":
             # currently UTLS will create TLS connection by itself.
             # So will not support LAN proxy.
             sock = None
         else:
+            family = socket.AF_INET6 if ":" in ip_text else socket.AF_INET
             if int(self.config.PROXY_ENABLE):
-                sock = socks.socksocket(socket.AF_INET if b':' not in ip else socket.AF_INET6)
+                sock = socks.socksocket(family)
             else:
-                sock = socket.socket(socket.AF_INET if b':' not in ip else socket.AF_INET6)
+                sock = socket.socket(family)
 
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 

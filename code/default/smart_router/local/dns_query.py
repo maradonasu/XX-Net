@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding:utf-8
 
 # public DNS servers https://en.wikipedia.org/wiki/Public_recursive_name_server

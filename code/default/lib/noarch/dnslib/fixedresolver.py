@@ -5,7 +5,7 @@
                     to all requests
 """
 
-
+from __future__ import print_function
 
 import copy
 
@@ -65,15 +65,15 @@ if __name__ == '__main__':
             args.response = open(args.zonefile)
 
     resolver = FixedResolver(args.response)
-    logger = DNSLogger(args.log,args.log_prefix)
+    logger = DNSLogger(args.log,prefix=args.log_prefix)
 
     print("Starting Fixed Resolver (%s:%d) [%s]" % (
                         args.address or "*",
                         args.port,
                         "UDP/TCP" if args.tcp else "UDP"))
 
-    # for rr in resolver.rrs:
-    #     print("    | ",rr.toZone().strip(),sep="")
+    for rr in resolver.rrs:
+        print("    | ",rr.toZone().strip(),sep="")
     print()
 
     if args.udplen:

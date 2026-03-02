@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding:utf-8
 
 
@@ -102,6 +102,9 @@ class HttpsDispatcher(object):
 
         self.trigger_create_worker_cv = SimpleCondition()
         self.wait_a_worker_cv = SimpleCondition()
+        
+        self._last_worker_cleanup = 0
+        self._worker_cleanup_interval = 5
 
         threading.Thread(target=self.dispatcher, name="%s_dispatcher" % self.logger.name).start()
         threading.Thread(target=self.create_worker_thread, name="%s_create_worker_thread" % self.logger.name).start()
@@ -241,8 +244,6 @@ class HttpsDispatcher(object):
                     pass
 
     def get_worker(self, nowait=False):
-        # self._debug_log("start get_worker")
-
         while self.running:
             top_score = 99999999
             best_score = 99999999
@@ -250,17 +251,19 @@ class HttpsDispatcher(object):
             good_worker = 0
             idle_num = 0
             now = time.time()
-
-            self._remove_life_end_workers()
+            
+            if now - self._last_worker_cleanup > self._worker_cleanup_interval:
+                self._remove_life_end_workers()
+                self._last_worker_cleanup = now
 
             for worker in self.workers:
                 score = worker.get_score()
+                    
                 if top_score > score:
                     top_score = score
 
                 if worker.is_life_end():
                     self._debug_log("life end worker: %s", worker.ip_str)
-                    # self.close_cb(worker)
                     continue
 
                 good_worker += 1
@@ -376,7 +379,14 @@ class HttpsDispatcher(object):
                 self.continue_fail_num += 1
                 self.last_fail_time = time.time()
                 if task.worker:
-                    task.worker.continue_fail_tasks += 1
+                    if not response and task.worker.is_active_timeout(task.timeout):
+                        task.worker.continue_fail_tasks = 0
+                        self.logger.debug("skip continue_fail on active h2 worker:%s streams:%d inactive:%.1f",
+                                          task.worker.ip_str, len(task.worker.streams),
+                                          time.time() - task.worker.last_recv_time)
+                        self.trigger_create_worker_cv.notify()
+                    else:
+                        task.worker.continue_fail_tasks += 1
                     if task.worker.continue_fail_tasks > self.config.dispather_worker_max_continue_fail:
                         self.trigger_create_worker_cv.notify()
                 else:

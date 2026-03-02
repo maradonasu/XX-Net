@@ -18,6 +18,7 @@ class Config(ConfigBase):
         self.set_var("dispather_max_workers", 60)
         self.set_var("dispather_connect_all_workers_on_startup", 1)
         self.set_var("dispather_ping_check_speed_interval", 50)
+        self.set_var("max_task_num", 256)
 
         # http1
         self.set_var("http1_first_ping_wait", 50)
@@ -29,6 +30,8 @@ class Config(ConfigBase):
 
         # connect_manager
         self.set_var("connection_pool_min", 0)
+        self.set_var("https_max_connect_thread", 4)
+        self.set_var("https_connection_pool_max", 8)
         self.set_var("max_links_per_ip", 20)
         self.set_var("connect_create_interval", 0)
 

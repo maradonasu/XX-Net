@@ -19,24 +19,26 @@ class ConnectCreator(ConnectCreatorBase):
             self.logger.debug("connect ip:%s sni:%s host:%s", ip_str, sni, host)
 
         ip, port = utils.get_ip_port(ip_str)
-        if isinstance(ip, str):
-            ip = utils.to_bytes(ip)
+        ip = utils.to_bytes(ip)
+        ip_text = utils.to_str(ip)
 
         if not utils.check_ip_valid(ip):
             try:
-                info = socket.getaddrinfo(ip, port, socket.AF_UNSPEC,
+                info = socket.getaddrinfo(ip_text, port, socket.AF_UNSPEC,
                                           socket.SOCK_STREAM)
 
                 af, socktype, proto, canonname, sa = info[0]
                 ip = utils.to_bytes(sa[0])
+                ip_text = sa[0]
                 ip_str = b"%s:%d" % (ip, port)
             except socket.gaierror:
                 pass
 
+        family = socket.AF_INET6 if ":" in ip_text else socket.AF_INET
         if int(self.config.PROXY_ENABLE):
-            sock = socks.socksocket(socket.AF_INET if b':' not in ip else socket.AF_INET6)
+            sock = socks.socksocket(family)
         else:
-            sock = socket.socket(socket.AF_INET if b':' not in ip else socket.AF_INET6)
+            sock = socket.socket(family)
 
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 

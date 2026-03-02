@@ -51,7 +51,24 @@
         >>> q = DNSRecord.question("abc.def")
         >>> a = q.send("localhost",8053)
         Request: [...] (udp) / 'abc.def.' (A)
-        Reply: [...] (udp) / 'abc.def.' (A) / RRs:
+        Reply: [...] (udp) / 'abc.def.' (A) / NXDOMAIN
+        >>> print(DNSRecord.parse(a))
+        ;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: ...
+        ;; flags: qr aa rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 0
+        ;; QUESTION SECTION:
+        ;abc.def.                       IN      A
+        >>> server.stop()
+
+        DNSLogger accepts custom logging function (logf)
+
+        >>> resolver = BaseResolver()
+        >>> logger = DNSLogger(prefix=False,logf=lambda s:print(s.upper()))
+        >>> server = DNSServer(resolver,port=8054,address="localhost",logger=logger)
+        >>> server.start_thread()
+        >>> q = DNSRecord.question("abc.def")
+        >>> a = q.send("localhost",8054)
+        REQUEST: [...] (UDP) / 'ABC.DEF.' (A)
+        REPLY: [...] (UDP) / 'ABC.DEF.' (A) / NXDOMAIN
         >>> print(DNSRecord.parse(a))
         ;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: ...
         ;; flags: qr aa rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 0
@@ -65,9 +82,10 @@
         ...         reply.add_answer(*RR.fromZone("abc.def. 60 A 1.2.3.4"))
         ...         return reply
         >>> resolver = TestResolver()
-        >>> server = DNSServer(resolver,port=8053,address="localhost",logger=logger,tcp=True)
+        >>> logger = DNSLogger(prefix=False)
+        >>> server = DNSServer(resolver,port=8055,address="localhost",logger=logger,tcp=True)
         >>> server.start_thread()
-        >>> a = q.send("localhost",8053,tcp=True)
+        >>> a = q.send("localhost",8055,tcp=True)
         Request: [...] (tcp) / 'abc.def.' (A)
         Reply: [...] (tcp) / 'abc.def.' (A) / RRs: A
         >>> print(DNSRecord.parse(a))
@@ -81,14 +99,14 @@
 
 
 """
-
+from __future__ import print_function
 
 import binascii,socket,struct,threading,time
 
 try:
     import socketserver
 except ImportError:
-    import socketserver as socketserver
+    import SocketServer as socketserver
 
 from dnslib import DNSRecord,DNSError,QTYPE,RCODE,RR
 
@@ -127,9 +145,15 @@ class DNSHandler(socketserver.BaseRequestHandler):
         if self.server.socket_type == socket.SOCK_STREAM:
             self.protocol = 'tcp'
             data = self.request.recv(8192)
+            if len(data) < 2:
+                self.server.logger.log_error(self,"Request Truncated")
+                return
             length = struct.unpack("!H",bytes(data[:2]))[0]
             while len(data) - 2 < length:
-                data += self.request.recv(8192)
+                new_data = self.request.recv(8192)
+                if not new_data:
+                    break
+                data += new_data
             data = data[2:]
         else:
             self.protocol = 'udp'
@@ -188,9 +212,12 @@ class DNSLogger:
             log_truncated     - Truncated
             log_error         - Decoding error
             log_data          - Dump full request/response
+
+        A custom logging function can be passed to the constructor via the
+        `logf` parameter (defaults to print)
     """
 
-    def __init__(self,log="",prefix=True):
+    def __init__(self,log="",prefix=True,logf=None):
         """
             Selectively enable log hooks depending on log argument
             (comma separated list of hooks to enable/disable)
@@ -201,6 +228,8 @@ class DNSLogger:
             - If entry doesn't start with +/- replace defaults
 
             Prefix argument enables/disables log prefix
+
+            Logf argument sets log print function (defaults to print)
         """
         default = ["request","reply","truncated","error"]
         log = log.split(",") if log else []
@@ -212,20 +241,21 @@ class DNSLogger:
             if l[4:] not in enabled:
                 setattr(self,l,self.log_pass)
         self.prefix = prefix
+        self.logf = logf or print
 
     def log_pass(self,*args):
         pass
 
     def log_prefix(self,handler):
         if self.prefix:
-            return "%s [%s:%s] " % (time.strftime("%Y-%M-%d %X"),
+            return "%s [%s:%s] " % (time.strftime("%Y-%m-%d %X"),
                                handler.__class__.__name__,
                                handler.server.resolver.__class__.__name__)
         else:
             return ""
 
     def log_recv(self,handler,data):
-        print("%sReceived: [%s:%d] (%s) <%d> : %s" % (
+        self.logf("%sReceived: [%s:%d] (%s) <%d> : %s" % (
                     self.log_prefix(handler),
                     handler.client_address[0],
                     handler.client_address[1],
@@ -234,7 +264,7 @@ class DNSLogger:
                     binascii.hexlify(data)))
 
     def log_send(self,handler,data):
-        print("%sSent: [%s:%d] (%s) <%d> : %s" % (
+        self.logf("%sSent: [%s:%d] (%s) <%d> : %s" % (
                     self.log_prefix(handler),
                     handler.client_address[0],
                     handler.client_address[1],
@@ -243,7 +273,7 @@ class DNSLogger:
                     binascii.hexlify(data)))
 
     def log_request(self,handler,request):
-        print("%sRequest: [%s:%d] (%s) / '%s' (%s)" % (
+        self.logf("%sRequest: [%s:%d] (%s) / '%s' (%s)" % (
                     self.log_prefix(handler),
                     handler.client_address[0],
                     handler.client_address[1],
@@ -253,7 +283,8 @@ class DNSLogger:
         self.log_data(request)
 
     def log_reply(self,handler,reply):
-        print("%sReply: [%s:%d] (%s) / '%s' (%s) / RRs: %s" % (
+        if reply.header.rcode == RCODE.NOERROR:
+            self.logf("%sReply: [%s:%d] (%s) / '%s' (%s) / RRs: %s" % (
                     self.log_prefix(handler),
                     handler.client_address[0],
                     handler.client_address[1],
@@ -261,10 +292,19 @@ class DNSLogger:
                     reply.q.qname,
                     QTYPE[reply.q.qtype],
                     ",".join([QTYPE[a.rtype] for a in reply.rr])))
+        else:
+            self.logf("%sReply: [%s:%d] (%s) / '%s' (%s) / %s" % (
+                    self.log_prefix(handler),
+                    handler.client_address[0],
+                    handler.client_address[1],
+                    handler.protocol,
+                    reply.q.qname,
+                    QTYPE[reply.q.qtype],
+                    RCODE[reply.header.rcode]))
         self.log_data(reply)
 
     def log_truncated(self,handler,reply):
-        print("%sTruncated Reply: [%s:%d] (%s) / '%s' (%s) / RRs: %s" % (
+        self.logf("%sTruncated Reply: [%s:%d] (%s) / '%s' (%s) / RRs: %s" % (
                     self.log_prefix(handler),
                     handler.client_address[0],
                     handler.client_address[1],
@@ -275,7 +315,7 @@ class DNSLogger:
         self.log_data(reply)
 
     def log_error(self,handler,e):
-        print("%sInvalid Request: [%s:%d] (%s) :: %s" % (
+        self.logf("%sInvalid Request: [%s:%d] (%s) :: %s" % (
                     self.log_prefix(handler),
                     handler.client_address[0],
                     handler.client_address[1],
@@ -283,14 +323,24 @@ class DNSLogger:
                     e))
 
     def log_data(self,dnsobj):
-        # print("\n",dnsobj.toZone("    "),"\n",sep="")
-        pass
+        self.logf("\n%s\n" % (dnsobj.toZone("    ")))
 
-class UDPServer(socketserver.UDPServer):
-    allow_reuse_address = True
 
-class TCPServer(socketserver.TCPServer):
-    allow_reuse_address = True
+class UDPServer(socketserver.ThreadingMixIn,socketserver.UDPServer,object):
+    def __init__(self, server_address, handler):
+        self.allow_reuse_address = True
+        self.daemon_threads = True
+        if server_address[0] != '' and ':' in server_address[0]:
+            self.address_family = socket.AF_INET6
+        super(UDPServer,self).__init__(server_address, handler)
+
+class TCPServer(socketserver.ThreadingMixIn,socketserver.TCPServer,object):
+    def __init__(self, server_address, handler):
+        self.allow_reuse_address = True
+        self.daemon_threads = True
+        if server_address[0] != '' and ':' in server_address[0]:
+            self.address_family = socket.AF_INET6
+        super(TCPServer,self).__init__(server_address, handler)
 
 class DNSServer(object):
 
@@ -335,7 +385,7 @@ class DNSServer(object):
         self.server.serve_forever()
 
     def start_thread(self):
-        self.thread = threading.Thread(target=self.server.serve_forever, name="dns_server")
+        self.thread = threading.Thread(target=self.server.serve_forever)
         self.thread.daemon = True
         self.thread.start()
 
@@ -343,8 +393,8 @@ class DNSServer(object):
         self.server.shutdown()
 
     def isAlive(self):
-        return self.thread.isAlive()
+        return self.thread.is_alive()
 
 if __name__ == "__main__":
-    import doctest
-    doctest.testmod(optionflags=doctest.ELLIPSIS)
+    import doctest,sys
+    sys.exit(0 if doctest.testmod(optionflags=doctest.ELLIPSIS).failed == 0 else 1)

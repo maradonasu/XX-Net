@@ -1,16 +1,13 @@
 
+#!/usr/bin/env python3
+# coding:utf-8
+
 import selectors2 as selectors
 from xlog import getLogger
 xlog = getLogger("simple_http_client")
 
-try:
-    # py3
-    from urllib.parse import urlparse, urlsplit
-    from http.client import IncompleteRead
-except ImportError:
-    # py2
-    from urlparse import urlparse, urlsplit
-    from httplib import IncompleteRead
+from urllib.parse import urlparse, urlsplit
+from http.client import IncompleteRead
 
 import socket
 import time

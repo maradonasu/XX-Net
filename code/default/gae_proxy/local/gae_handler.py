@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding:utf-8
 
 
@@ -66,10 +66,7 @@ import zlib
 import traceback
 from mimetypes import guess_type
 
-try:
-    from urllib.parse import urlparse, urljoin, urljoin
-except ImportError:
-    from urlparse import urlparse, urljoin, urljoin
+from urllib.parse import urlparse, urljoin
 
 from xx_six import ConnectionError, ConnectionResetError, BrokenPipeError, ConnectionAbortedError
 

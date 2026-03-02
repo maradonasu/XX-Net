@@ -1,4 +1,7 @@
 
+#!/usr/bin/env python3
+# coding:utf-8
+
 import os
 import sys
 
@@ -19,10 +22,7 @@ class SimpleI18N(object):
 
     @staticmethod
     def po_loader(file):
-        if sys.version_info[0] == 2:
-            fp = open(file, "r")
-        else:
-            fp = open(file, "rb")
+        fp = open(file, "rb")
 
         po_dict = {}
         while True:
@@ -123,12 +123,8 @@ class SimpleI18N(object):
     def render(self, lang_path, template_file):
         po_file = os.path.join(lang_path, self.lang, "LC_MESSAGES", "messages.po")
 
-        if sys.version_info[0] == 2:
-            fp = open(template_file, "r")
-            content = fp.read()
-        else:
-            fp = open(template_file, "rb")
-            content = fp.read()
+        fp = open(template_file, "rb")
+        content = fp.read()
 
         if not os.path.isfile(po_file):
             return self._render(dict(), content)

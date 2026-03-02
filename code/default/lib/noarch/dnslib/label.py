@@ -4,12 +4,18 @@
     DNSLabel/DNSBuffer - DNS label handling & encoding/decoding
 """
 
+from __future__ import print_function
 
-
-import fnmatch
+import fnmatch,re,string
 
 from dnslib.bit import get_bits,set_bits
 from dnslib.buffer import Buffer, BufferError
+
+# In theory valid label characters should be letters,digits,hyphen,underscore (LDH)
+# LDH = set(bytearray(b'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_'))
+# For compatibility we only escape non-printable characters
+LDH = set(range(33,127))
+ESCAPE = re.compile(r'\\([0-9][0-9][0-9])')
 
 class DNSLabelError(Exception):
     pass
@@ -44,17 +50,31 @@ class DNSLabel(object):
     True
     >>> l3.matchSuffix("xxx.yyy.")
     False
+    >>> l3.matchSuffix("Bbb.ccc.")
+    True
     >>> l3.stripSuffix("bbb.ccc.")
     <DNSLabel: 'xxx.yyy.aaa.'>
     >>> l3.matchGlob("*.[abc]aa.BBB.ccc")
     True
     >>> l3.matchGlob("*.[abc]xx.bbb.ccc")
     False
+    >>> l1.matchWildcard("*.bbb.ccc")
+    True
+    >>> l1.matchWildcard("*.CCC")
+    True
+    >>> l1.matchWildcard("*.xxx.bbb.ccc")
+    False
+    >>> l1.matchWildcard("aaa.bbb.ccc")
+    True
+    >>> l1.matchWildcard("bbb.ccc")
+    False
+    >>> l1.matchWildcard("xxx.aaa.bbb.ccc")
+    False
 
     # Too hard to get unicode doctests to work on Python 3.2
     # (works on 3.3)
-    # >>> u1 = DNSLabel(u'\\u2295.com')
-    # >>> u1.__str__() == u'\\u2295.com.'
+    # >>> u1 = DNSLabel(u'\u2295.com')
+    # >>> u1.__str__() == u'\u2295.com.'
     # True
     # >>> u1.label == ( b"xn--keh", b"com" )
     # True
@@ -77,9 +97,15 @@ class DNSLabel(object):
             if not label or label in (b'.','.'):
                 self.label = ()
             elif type(label) is not bytes:
+                if type('') != type(b''):
+                    # Py3
+                    label = ESCAPE.sub(lambda m:chr(int(m[1])),label)
                 self.label = tuple(label.encode("idna").\
                                 rstrip(b".").split(b"."))
             else:
+                if type('') == type(b''):
+                    # Py2
+                    label = ESCAPE.sub(lambda m:chr(int(m.groups()[0])),label)
                 self.label = tuple(label.rstrip(b".").split(b"."))
 
     def add(self,name):
@@ -96,19 +122,39 @@ class DNSLabel(object):
             pattern = DNSLabel(pattern)
         return fnmatch.fnmatch(str(self).lower(),str(pattern).lower())
 
+    def matchWildcard(self,pattern):
+        """
+            Wildcard match according to https://datatracker.ietf.org/doc/html/rfc1034#section-4.3.3   
+            (This only allows a single '*' prefix wildcard which matches one or more labels)
+
+            Note that the spec is defined at the zone level (if there is a more
+            specific overlapping match within the zone) some soem additional
+            logic is required in the resolved to implement this.
+
+        """
+        if type(pattern) != DNSLabel:
+            pattern = DNSLabel(pattern)
+        if pattern.label[0] != b'*' and len(self.label) != len(pattern.label):
+            # No wildcard - number of labels must match
+            return False
+        for (a,b) in zip(reversed(self.label),reversed(pattern.label)):
+            if b != b'*' and a.lower() != b.lower():
+                return False
+        return True
+
     def matchSuffix(self,suffix):
         """
             Return True if label suffix matches
         """
         suffix = DNSLabel(suffix)
-        return self.label[-len(suffix.label):] == suffix.label
+        return DNSLabel(self.label[-len(suffix.label):]) == suffix
 
     def stripSuffix(self,suffix):
         """
             Strip suffix from label
         """
         suffix = DNSLabel(suffix)
-        if self.label[-len(suffix.label):] == suffix.label:
+        if self.matchSuffix(suffix):
             return DNSLabel(self.label[:-len(suffix.label)])
         else:
             return self
@@ -116,14 +162,22 @@ class DNSLabel(object):
     def idna(self):
         return ".".join([ s.decode("idna") for s in self.label ]) + "."
 
+    def _decode(self,s):
+        if set(s).issubset(LDH):
+            # All chars in LDH
+            return s.decode()
+        else:
+            # Need to encode
+            return "".join([(chr(c) if (c in LDH) else "\\%03d" % c) for c in s])
+
     def __str__(self):
-        return ".".join([ s.decode() for s in self.label ]) + "."
+        return ".".join([ self._decode(bytearray(s)) for s in self.label ]) + "."
 
     def __repr__(self):
         return "<DNSLabel: '%s'>" % str(self)
 
     def __hash__(self):
-        return hash(self.label)
+        return hash(tuple(map(lambda x:x.lower(),self.label)))
 
     def __ne__(self,other):
         return not self == other
@@ -263,7 +317,7 @@ class DNSBuffer(Buffer):
             else:
                 self.names[tuple(name)] = self.offset
                 element = name.pop(0)
-                if len(element) > 256:
+                if len(element) > 63:
                     raise DNSLabelError("Label component too long: %r" % element)
                 self.pack("!B",len(element))
                 self.append(element)
@@ -272,7 +326,7 @@ class DNSBuffer(Buffer):
     def encode_name_nocompress(self,name):
         """
             Encode and store label with no compression
-            (needed for RRSIG)
+            (needed for RRSIG, SRV, NSEC)
         """
         if not isinstance(name,DNSLabel):
             name = DNSLabel(name)
@@ -288,5 +342,5 @@ class DNSBuffer(Buffer):
         self.append(b'\x00')
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    import doctest,sys
+    sys.exit(0 if doctest.testmod().failed == 0 else 1)

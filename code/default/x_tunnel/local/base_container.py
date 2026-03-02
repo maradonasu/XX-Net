@@ -5,6 +5,7 @@ import time
 import socket
 import xstruct as struct
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 import selectors2 as selectors
 
@@ -12,6 +13,8 @@ import utils
 
 from xlog import getLogger
 xlog = getLogger("x_tunnel")
+
+_stop_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="conn_stop")
 
 
 class WriteBuffer(object):
@@ -388,10 +391,9 @@ class ConnectionPipe(object):
         self._lock = threading.RLock()
 
         if sys.platform == "win32":
-            self.slow_wait = 0.05
+            self.slow_wait = 0.1
         else:
             self.slow_wait = 3
-            # self.slow_wait = 0.05
 
     def status(self):
         out_string = "ConnectionPipe:\r\n"
@@ -640,8 +642,7 @@ class Conn(object):
         return out_string
 
     def stop(self, reason=""):
-        threading.Thread(target=self.do_stop, args=(reason,),
-                         name="do_stop_%s:%d" % (self.host, self.port)).start()
+        _stop_executor.submit(self.do_stop, reason)
 
     def do_stop(self, reason="unknown"):
         self.xlog.debug("Conn session:%s %s:%d conn:%d fd:%d stop:%s", utils.to_str(self.session.session_id),

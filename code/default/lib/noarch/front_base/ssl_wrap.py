@@ -13,7 +13,6 @@ import socket
 import ssl
 import time
 import select
-import errno
 
 import utils
 
@@ -35,8 +34,7 @@ class SSLConnection(object):
 
     def wrap(self):
         ip, port = utils.get_ip_port(self.ip_str)
-        if isinstance(ip, str):
-            ip = utils.to_bytes(ip)
+        ip = utils.to_str(ip)
 
         try:
             self._sock.connect((ip, port))
@@ -45,12 +43,17 @@ class SSLConnection(object):
 
         self._connection = self._context.wrap_socket(self._sock, server_hostname=self.sni,
                                                      do_handshake_on_connect=False)
+        self._connection.settimeout(self.timeout)
 
     def is_support_h2(self):
-        if sys.version_info[0] == 3:
-            return self._connection.selected_alpn_protocol() == "h2" or self._connection.selected_npn_protocol() == "h2"
-        else:
-            return self._connection.get_alpn_proto_negotiated()
+        alpn_proto = self._connection.selected_alpn_protocol()
+        if alpn_proto == "h2":
+            return True
+
+        if self._context.support_alpn_npn == "npn":
+            return self._connection.selected_npn_protocol() == "h2"
+
+        return False
 
     def __getattr__(self, attr):
         if attr == "socket_closed":
@@ -107,8 +110,19 @@ class SSLConnection(object):
 
         return self.peer_cert
 
+    def __wait_for_ready(self, read=False, write=False, timeout=0):
+        rlist = [self._sock] if read else []
+        wlist = [self._sock] if write else []
+        rlist_ready, wlist_ready, errors = select.select(rlist, wlist, [self._sock], timeout)
+        if errors:
+            return False
+        if read and not rlist_ready:
+            return False
+        if write and not wlist_ready:
+            return False
+        return True
+
     def __iowait(self, io_func, *args, **kwargs):
-        fd = self._sock.fileno()
         time_start = time.time()
         while self.running:
             time_now = time.time()
@@ -120,9 +134,27 @@ class SSLConnection(object):
 
             try:
                 return io_func(*args, **kwargs)
+            except ssl.SSLWantReadError:
+                if not self.__wait_for_ready(read=True, timeout=wait_timeout):
+                    raise socket.timeout("timed out")
+            except ssl.SSLWantWriteError:
+                if not self.__wait_for_ready(write=True, timeout=wait_timeout):
+                    raise socket.timeout("timed out")
+            except ssl.SSLError as e:
+                if e.errno == ssl.SSL_ERROR_WANT_READ:
+                    if not self.__wait_for_ready(read=True, timeout=wait_timeout):
+                        raise socket.timeout("timed out")
+                elif e.errno == ssl.SSL_ERROR_WANT_WRITE:
+                    if not self.__wait_for_ready(write=True, timeout=wait_timeout):
+                        raise socket.timeout("timed out")
+                else:
+                    raise
             except Exception as e:
                 #self.logger.exception("e:%r", e)
                 raise e
+
+            if time.time() - time_start > self.timeout:
+                raise socket.timeout("timed out")
 
         return 0
 
@@ -240,11 +272,24 @@ class SSLContext(object):
 
         self.logger.info("SSL use version:%s", self.supported_protocol())
         self.context = ssl.SSLContext(protocol=ssl_version)
+        if hasattr(self.context, "check_hostname"):
+            self.context.check_hostname = False
+        if hasattr(ssl, "OP_NO_COMPRESSION"):
+            self.context.options |= ssl.OP_NO_COMPRESSION
+        if hasattr(ssl, "OP_NO_RENEGOTIATION"):
+            self.context.options |= ssl.OP_NO_RENEGOTIATION
+        if hasattr(ssl, "TLSVersion"):
+            self.context.minimum_version = ssl.TLSVersion.TLSv1_2
 
         self.set_ca(ca_certs)
 
         if cipher_suites:
             self.context.set_ciphers(':'.join(cipher_suites))
+        else:
+            self.context.set_ciphers('ALL:!aPSK:!ECDSA+SHA1:!3DES')
+
+        if hasattr(self.context, "post_handshake_auth"):
+            self.context.post_handshake_auth = False
 
         self.support_alpn_npn = None
         if support_http2:

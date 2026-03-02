@@ -3,7 +3,7 @@
 """
     Some basic bit mainpulation utilities
 """
-
+from __future__ import print_function
 
 FILTER = bytearray([ (i < 32 or i > 127) and 46 or i for i in range(256) ])
 
@@ -84,6 +84,5 @@ def binary(n,count=16,reverse=False):
     return "".join(bits)
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
-
+    import doctest,sys
+    sys.exit(0 if doctest.testmod().failed == 0 else 1)

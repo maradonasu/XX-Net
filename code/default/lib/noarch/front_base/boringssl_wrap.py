@@ -36,9 +36,7 @@ class SSLConnection(object):
 
     def wrap(self):
         ip, port = utils.get_ip_port(self.ip_str)
-        self.ip = ip
-        if isinstance(ip, str):
-            ip = utils.to_bytes(ip)
+        self.ip = utils.to_str(ip)
 
         try:
             self._sock.connect((ip, port))

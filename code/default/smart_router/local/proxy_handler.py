@@ -1,13 +1,12 @@
+#!/usr/bin/env python3
+# coding:utf-8
+
 import time
 import socket
 import struct
 import json
 
-try:
-    from urllib.parse import urlparse
-    from urllib.parse import parse_qs
-except ImportError:
-    from urlparse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 from . import pac_server
 from . import global_var as g

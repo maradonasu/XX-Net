@@ -1,10 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding:utf-8
 
 # A tool to help evaluate the teredo servers.
 # Thanks XndroidDev
 # Author: SeaHOH <seahoh@gmail.com>
-# Compatible: Python 2.7 & 3.4 & 3.5 & 3.6
+# Compatible: Python 3.13+
 # References:
 #   https://tools.ietf.org/html/rfc4380 5.1 5.2
 #   https://tools.ietf.org/html/rfc4861 4.1 4.2
@@ -14,10 +14,6 @@
 __version__ = '0.1.0'
 
 import sys
-
-if sys.platform == 'win32' and sys.version_info[0] < 3:
-    import win_inet_pton
-
 import os
 import socket
 import random
@@ -29,21 +25,8 @@ import select
 import errno
 import subprocess
 import threading
-from six.moves import queue as Queue
+import queue as Queue
 
-
-try:
-    _real_raw_input = raw_input
-
-
-    def raw_input(s='', file=sys.stdout):
-        if isinstance(s, str):
-            file.write(s.encode(sys.getfilesystemencoding(), 'replace'))
-            return _real_raw_input()
-        else:
-            return _real_raw_input(s)
-except NameError:
-    raw_input = input
 
 logger = logging.getLogger('pteredor')
 

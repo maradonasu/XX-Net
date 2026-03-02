@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding:utf-8
 
 import os, stat
@@ -10,16 +10,8 @@ import sys
 import platform
 import uuid
 
-
-try:
-    from urllib.request import build_opener, HTTPSHandler, ProxyHandler
-except ImportError:
-    from urllib2 import build_opener, HTTPSHandler, ProxyHandler
-
-try:
-    reduce         # Python 2
-except NameError:  # Python 3
-    from functools import reduce
+from urllib.request import build_opener, HTTPSHandler, ProxyHandler
+from functools import reduce
 
 import utils
 from xlog import getLogger
