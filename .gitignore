@@ -18,7 +18,7 @@ desktop.ini
 .pytest_cache
 *.log
 code/version.txt
-
+python3
 
 # Babel files
 messages.po-e
