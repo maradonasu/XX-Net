@@ -109,8 +109,6 @@ def install_xxnet_files():
                 os.mkdir(target_path)
 
         for filename in files:
-            if relate_path == os.path.join("data", "gae_proxy") and filename == "config.ini":
-                continue
             if relate_path == os.path.join("data", "launcher") and filename == "config.yaml":
                 continue
             src_file = os.path.join(root, filename)

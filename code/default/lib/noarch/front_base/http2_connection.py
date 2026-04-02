@@ -222,7 +222,7 @@ class Http2Worker(HttpWorker):
     def close(self, reason="conn close"):
         # Notify loop to exit
         # This function may be call by out side http2
-        # When gae_proxy found the appid or ip is wrong
+        # When the upstream marks the connection unusable
         if reason.startswith("GoAway") or reason in ["life end"]:
             life_time = time.time() - self.ssl_sock.create_time
             self.logger.debug("%s close, reason: %s, life_time:%d trace:%s",

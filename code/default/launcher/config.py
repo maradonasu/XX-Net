@@ -36,7 +36,7 @@ config.set_var("auto_start", 0)
 config.set_var("popup_webui", 1)
 config.set_var("webui_auth", {})
 
-config.set_var("gae_show_detail", 0)
+config.set_var("show_detail", 0)
 config.set_var("show_compat_suggest", 1)
 config.set_var("proxy_by_app", 0)
 config.set_var("enabled_app_list", [])
@@ -60,19 +60,14 @@ config.set_var("clear_cache", 0)
 config.set_var("del_win", 0)
 config.set_var("del_mac", 0)
 config.set_var("del_linux", 0)
-config.set_var("del_gae", 0)
-config.set_var("del_gae_server", 0)
 config.set_var("del_xtunnel", 0)
-config.set_var("del_smartroute", 0)
 
 # Module
-config.set_var("all_modules", ["launcher", "gae_proxy", "x_tunnel", "smart_router"])
+config.set_var("all_modules", ["launcher", "x_tunnel"])
 config.set_var("enable_launcher", 1)
 config.set_var("enable_x_tunnel", 1)
-config.set_var("enable_gae_proxy", 0)
-config.set_var("enable_smart_router", 1)
 
-config.set_var("os_proxy_mode", "pac") # can be: gae, x_tunnel, smart_router, disable
+config.set_var("os_proxy_mode", "x_tunnel") # can be: x_tunnel, disable
 
 # Proxy
 config.set_var("global_proxy_enable", 0)

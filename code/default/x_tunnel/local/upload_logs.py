@@ -63,8 +63,6 @@ def collect_debug_and_log():
     # collect debug info and save to folders
     debug_infos = {
         "system_info": f"http://127.0.0.1:{port}/debug",
-        "gae_info": f"http://127.0.0.1:{port}/module/gae_proxy/control/debug",
-        "gae_log": f"http://127.0.0.1:{port}/module/gae_proxy/control/log?cmd=get_new&last_no=1",
         "xtunnel_info": f"http://127.0.0.1:{port}/module/x_tunnel/control/debug",
         "xtunnel_status": f"http://127.0.0.1:{port}/module/x_tunnel/control/status",
         "cloudflare_info": f"http://127.0.0.1:{port}/module/x_tunnel/control/cloudflare_front/debug",
@@ -74,7 +72,6 @@ def collect_debug_and_log():
         "tls_log": f"http://127.0.0.1:{port}/module/x_tunnel/control/tls_relay_front/log?cmd=get_new&last_no=1",
         "seley_log": f"http://127.0.0.1:{port}/module/x_tunnel/control/seley_front/log?cmd=get_new&last_no=1",
         "xtunnel_log": f"http://127.0.0.1:{port}/module/x_tunnel/control/log?cmd=get_new&last_no=1",
-        "smartroute_log": f"http://127.0.0.1:{port}/module/smart_router/control/log?cmd=get_new&last_no=1",
         "launcher_log": f"http://127.0.0.1:{port}/log?cmd=get_new&last_no=1"
     }
 

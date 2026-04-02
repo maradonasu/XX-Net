@@ -12,8 +12,8 @@ import utils
 from . import base_container
 import encrypt
 from . import global_var as g
-from gae_proxy.local import check_local_network
 from .upload_logs import upload_logs_thread
+from . import check_local_network
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 root_path = os.path.abspath(os.path.join(current_path, os.pardir, os.pardir))
@@ -109,8 +109,7 @@ class ProxySession(object):
         if g.config.upload_logs:
             threading.Thread(target=upload_logs_thread, name="upload_logs").start()
 
-        self.timeout_check_th = threading.Thread(target=self.timeout_checker, name="timeout_check")
-        self.timeout_check_th.start()
+        self.timeout_check_th = None
 
     def start(self):
         with self.lock:
@@ -149,6 +148,7 @@ class ProxySession(object):
                 return False
 
             self.running = True
+            self._start_timeout_checker()
 
             for i in range(0, g.config.concurent_thread_num):
                 if i in self.round_trip_thread:
@@ -161,6 +161,14 @@ class ProxySession(object):
             self.connection_pipe.start()
             xlog.info("session started.")
             return True
+
+    def _start_timeout_checker(self):
+        if self.timeout_check_th and self.timeout_check_th.is_alive():
+            return
+
+        self.timeout_check_th = threading.Thread(target=self.timeout_checker, name="timeout_check")
+        self.timeout_check_th.daemon = True
+        self.timeout_check_th.start()
 
     def timeout_checker(self):
         check_interval = 2
@@ -218,6 +226,10 @@ class ProxySession(object):
             self.connection_pipe.stop()
 
             xlog.debug("session stopped.")
+
+        if self.timeout_check_th and self.timeout_check_th.is_alive() and \
+                self.timeout_check_th is not threading.current_thread():
+            self.timeout_check_th.join(5)
 
     def reset(self):
         xlog.debug("session reset")

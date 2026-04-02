@@ -20,7 +20,6 @@ import threading
 import operator
 import socket
 import random
-from queue import Queue
 
 from .openssl_wrap import SSLConnection
 
@@ -110,7 +109,16 @@ class ConnectPool():
         try:
             pool = tuple(self.pool)
             for sock in pool:
-                inactive_time = time.time() - sock.last_use_time
+                last_use_time = getattr(sock, "last_use_time", None)
+                if last_use_time is None:
+                    try:
+                        sock.close()
+                    except Exception:
+                        pass
+                    self.pool.pop(sock, None)
+                    continue
+
+                inactive_time = time.time() - last_use_time
                 # self.logger.debug("inactive_time:%d", inactive_time * 1000)
                 if inactive_time >= maxtime:
                     return_list.append(sock)
@@ -139,7 +147,13 @@ class ConnectPool():
             i = 0
             for item in pool:
                 sock, t = item
-                out_str += "%d \t %s handshake:%d not_active_time:%d \r\n" % (i, sock.ip_str, t, time.time() - sock.last_use_time)
+                ip_str = getattr(sock, "ip_str", "unknown")
+                last_use_time = getattr(sock, "last_use_time", None)
+                if last_use_time is None:
+                    not_active_time = -1
+                else:
+                    not_active_time = time.time() - last_use_time
+                out_str += "%d \t %s handshake:%d not_active_time:%d \r\n" % (i, ip_str, t, not_active_time)
                 i += 1
         finally:
             self.pool_lock.release()
@@ -152,14 +166,14 @@ class ConnectManager(object):
         self.class_name = "ConnectManager"
         self.logger = logger
         self.config = config
+        self._normalize_config()
         self.connect_creator = connect_creator
         self.ip_manager = ip_manager
         self.check_local_network = check_local_network
 
-        self.thread_num_lock = threading.Lock()
+        self.connect_thread_cond = threading.Condition()
         self.timeout = 4
         self.start_connect_time = 0
-        self.thread_num = 0
         self.running = True
 
         self._waiting_num_lock = threading.Lock()
@@ -174,7 +188,7 @@ class ConnectManager(object):
         
         self.new_conn_pool = ConnectPool()
 
-        self.connecting_more_thread = None
+        self.connect_threads = []
 
         self.keep_alive_th = threading.Thread(target=self.keep_alive_thread,
                                               name="%s_conn_manager_keep_alive" % self.logger.name)
@@ -189,8 +203,44 @@ class ConnectManager(object):
         else:
             self.keep_conn_th = None
 
+        for _ in range(self.config.https_max_connect_thread):
+            connect_thread = threading.Thread(target=self._connect_thread,
+                                              name="%s_conn_manager__connect_th" % self.logger.name)
+            connect_thread.daemon = True
+            connect_thread.start()
+            self.connect_threads.append(connect_thread)
+
+    def _normalize_config(self):
+        if getattr(self.config, "https_max_connect_thread", 0) < 1:
+            self.config.https_max_connect_thread = 1
+
+        if getattr(self.config, "https_keep_alive", 0) < 7:
+            self.config.https_keep_alive = 7
+
+        if getattr(self.config, "https_connection_pool_max", 0) < 0:
+            self.config.https_connection_pool_max = 0
+
+        if getattr(self.config, "https_connection_pool_min", 0) < 0:
+            self.config.https_connection_pool_min = 0
+
+        if self.config.https_connection_pool_min > self.config.https_connection_pool_max:
+            self.config.https_connection_pool_min = self.config.https_connection_pool_max
+
     def stop(self):
         self.running = False
+        self.new_conn_pool.clear()
+        with self.connect_thread_cond:
+            self.connect_thread_cond.notify_all()
+
+        if self.keep_alive_th.is_alive() and self.keep_alive_th is not threading.current_thread():
+            self.keep_alive_th.join(5)
+
+        if self.keep_conn_th and self.keep_conn_th.is_alive() and self.keep_conn_th is not threading.current_thread():
+            self.keep_conn_th.join(5)
+
+        for thread in self.connect_threads:
+            if thread.is_alive() and thread is not threading.current_thread():
+                thread.join(5)
 
     def set_ssl_created_cb(self, cb):
         self.ssl_timeout_cb = cb
@@ -222,48 +272,30 @@ class ConnectManager(object):
                 continue
 
             if self.config.show_state_debug:
-                self.logger.debug("call _connect_process from keep_connection_daemon")
-            self._connect_process()
+                self.logger.debug("call _create_more_connection from keep_connection_daemon")
+            self._create_more_connection()
+            time.sleep(1)
 
     def _need_more_ip(self):
-        if self._connection_waiting_num:
-            return True
-        else:
+        return bool(self._connection_waiting_num)
+
+    def _need_keep_connection(self):
+        if not self.keep_conn_th:
             return False
+
+        return self.new_conn_pool.qsize() < self.config.https_connection_pool_min
+
+    def _need_more_connection(self):
+        return self._need_more_ip() or self._need_keep_connection()
 
     def _create_more_connection(self):
         if self.config.show_state_debug:
             self.logger.debug("_create_more_connection")
-        if not self.connecting_more_thread:
-            with self.thread_num_lock:
-                self.connecting_more_thread = threading.Thread(target=self._create_more_connection_worker,
-                                                               name="%s_conn_manager__create_more_conn" % self.logger.name)
-                self.connecting_more_thread.start()
+        if not self.running or not self._need_more_connection():
+            return
 
-    def _create_more_connection_worker(self):
-        if self.config.show_state_debug:
-            self.logger.debug("_create_more_connection_worker")
-        if self.start_connect_time and self.start_connect_time + 30 < time.time():
-            self.start_connect_time = 0
-            self.config.https_max_connect_thread += 1
-            self.logger.warning("Connect creating process blocked, max connect thread increase to %d",
-                                self.config.https_max_connect_thread)
-
-        for i in range(self.thread_num, self.config.https_max_connect_thread):
-            self.thread_num_lock.acquire()
-            self.thread_num += 1
-            self.thread_num_lock.release()
-
-            p = threading.Thread(target=self._connect_thread, name="%s_conn_manager__connect_th" % self.logger.name)
-            p.start()
-            if self.config.connect_create_interval > 0.1:
-                time.sleep(self.config.connect_create_interval)
-
-            if not self._need_more_ip():
-                break
-
-        with self.thread_num_lock:
-            self.connecting_more_thread = None
+        with self.connect_thread_cond:
+            self.connect_thread_cond.notify_all()
 
     def _connect_thread(self, sleep_time=0):
         if self.config.show_state_debug:
@@ -273,20 +305,22 @@ class ConnectManager(object):
             self.logger.debug("_connect_thread sleep %f", sleep_time)
             time.sleep(sleep_time)
 
-        try:
-            while self.running and self._need_more_ip() and time.time() - self.no_ip_time > 10:
-                if self.new_conn_pool.qsize() > self.config.https_connection_pool_max:
-                    break
+        while self.running:
+            with self.connect_thread_cond:
+                while self.running:
+                    if self._need_more_connection() and time.time() - self.no_ip_time > 10 and \
+                            self.new_conn_pool.qsize() <= self.config.https_connection_pool_max:
+                        break
+                    self.connect_thread_cond.wait(1)
 
-                if self.config.show_state_debug:
-                    self.logger.debug("call _connect_process from _connect_thread")
-                self.start_connect_time = time.time()
-                self._connect_process()
-                self.start_connect_time = 0
-        finally:
-            self.thread_num_lock.acquire()
-            self.thread_num -= 1
-            self.thread_num_lock.release()
+            if not self.running:
+                break
+
+            if self.config.show_state_debug:
+                self.logger.debug("call _connect_process from _connect_thread")
+            self.start_connect_time = time.time()
+            self._connect_process()
+            self.start_connect_time = 0
 
     def _connect_process(self):
         if self.config.show_state_debug:
@@ -315,17 +349,6 @@ class ConnectManager(object):
         except Exception as e:
             self.logger.exception("connect_process except:%r", e)
 
-    def _connect_ssl(self, ip_str, sni, host, close_cb, queue):
-        if self.config.show_state_debug:
-            self.logger.debug("_connect_ssl")
-
-        try:
-            ssl_sock = self.connect_creator.connect_ssl(ip_str, sni, host, close_cb=close_cb)
-            queue.put(ssl_sock)
-        except Exception as e:
-            self.logger.warn("_connect_ssl %s sni:%s host:%s fail:%r", ip_str, sni, host, e)
-            queue.put(e)
-
     def _create_ssl_connection(self, host_info):
         if self.config.show_state_debug:
             self.logger.debug("_create_ssl_connection")
@@ -335,17 +358,9 @@ class ConnectManager(object):
         host = host_info["host"]
 
         try:
-            q = Queue()
-            fn_args = (ip_str, sni, host, self.ip_manager.ssl_closed, q)
-            t = threading.Thread(target=self._connect_ssl, args=fn_args, name="connect_ssl_%s" % ip_str)
-            t.start()
-            try:
-                ssl_sock = q.get(timeout=30)
-            except:
-                self.logger.warn("connect_ssl_timeout %s", ip_str)
-                raise socket.error("timeout")
-
-            if not ssl_sock or isinstance(ssl_sock, ValueError) or isinstance(ssl_sock, OSError) or not hasattr(ssl_sock, "handshake_time"):
+            ssl_sock = self.connect_creator.connect_ssl(ip_str, sni, host, close_cb=self.ip_manager.ssl_closed)
+            if not ssl_sock or isinstance(ssl_sock, ValueError) or isinstance(ssl_sock, OSError) or \
+                    not hasattr(ssl_sock, "handshake_time"):
                 raise socket.error("timeout")
 
             self.ip_manager.update_ip(ip_str, sni, ssl_sock.handshake_time)
@@ -380,13 +395,20 @@ class ConnectManager(object):
         with self._waiting_num_lock:
             self._connection_waiting_num += 1
 
-        end_time = time.time() + timeout
+        end_time = time.monotonic() + max(timeout, 0)
         try:
             while self.running:
                 ret = self.new_conn_pool.get(block=False)
+                if timeout <= 0 and not ret:
+                    return None
+
                 if not ret:
                     self._create_more_connection()
-                    ret = self.new_conn_pool.get(block=True, timeout=1)
+                    remaining = end_time - time.monotonic()
+                    if remaining <= 0:
+                        self.logger.debug("get_ssl_connection timeout")
+                        return None
+                    ret = self.new_conn_pool.get(block=True, timeout=remaining)
 
                 if ret:
                     handshake_time, ssl_sock = ret
@@ -399,7 +421,7 @@ class ConnectManager(object):
                         self.ip_manager.report_connect_closed(ssl_sock.ip_str, ssl_sock.sni, "get_ssl_timeout")
                         ssl_sock.close()
                 else:
-                    if time.time() > end_time:
+                    if time.monotonic() > end_time:
                         self.logger.debug("get_ssl_connection timeout")
                         return None
 

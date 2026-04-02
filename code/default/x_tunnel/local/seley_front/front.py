@@ -8,10 +8,10 @@ import xlog
 
 from front_base.http_dispatcher import HttpsDispatcher
 from front_base.connect_manager import ConnectManager
-from gae_proxy.local import check_local_network
 
 from .config import Config
 from .connect_creator import ConnectCreator
+from .. import check_local_network
 
 data_path = env_info.data_path
 module_data_path = os.path.join(data_path, 'x_tunnel')

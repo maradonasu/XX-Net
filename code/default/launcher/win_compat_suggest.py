@@ -73,14 +73,10 @@ class Win10PortReserveSolution(object):
 
     def get_service_ports(self):
         web_console_port = config.control_port
-        smart_router_config_fn = os.path.join(data_path, "smart_router", "config.json")
-        smart_router_socks_port = self.get_config_value(smart_router_config_fn, "proxy_port", 8086)
-        smart_router_dns_port = self.get_config_value(smart_router_config_fn, "dns_backup_port", 8053)
-
         x_tunnel_config_fn = os.path.join(data_path, "x_tunnel", "client.json")
         x_tunnel_port = self.get_config_value(x_tunnel_config_fn, "socks_port", 1080)
 
-        return [web_console_port, smart_router_socks_port, smart_router_dns_port, x_tunnel_port]
+        return [web_console_port, x_tunnel_port]
 
     def is_port_reserve_conflict(self):
         cmd = "netsh int ipv4 show excludedportrange protocol=tcp"

@@ -63,30 +63,18 @@
             <label for="modules-manager" class="pull-down-control">
                 <i class="icon icon-chevron-right"></i> {{ _( "Module management" ) }}
             </label>
-        </div> <!-- .span4 -->
-    </div> <!-- .row-fluid -->
+        </div>
+    </div>
     <div id="modules-manager" style="display: none;">
         <hr>
         <div class="row-fluid">
-            <div class="config_label">{{ _( "Enable" ) }} {{ _( "GAE Proxy" ) }}</div> <!-- .span4 -->
-            <div class="config_switch">
-                <input id="gae_proxy-enable" type="checkbox" data-toggle="switch"/> <!--disabled-->
-            </div> <!-- .span8 -->
-        </div> <!-- .row-fluid -->
-        <div class="row-fluid">
-            <div class="config_label">{{ _( "Enable" ) }} {{ _( "X-Tunnel" ) }}</div> <!-- .span4 -->
+            <div class="config_label">{{ _( "Enable" ) }} {{ _( "X-Tunnel" ) }}</div>
             <div class="config_switch">
                 <input id="x-tunnel-enable" type="checkbox" data-toggle="switch"/>
-            </div> <!-- .span8 -->
-        </div> <!-- .row-fluid -->
-        <div class="row-fluid" id="smart_router_model">
-            <div class="config_label">{{ _( "Enable" ) }} {{ _( "Smart Router" ) }}</div> <!-- .span4 -->
-            <div class="config_switch">
-                <input id="smart-router-enable" type="checkbox" data-toggle="switch"/>
-            </div> <!-- .span8 -->
-        </div> <!-- .row-fluid -->
+            </div>
+        </div>
         <hr>
-    </div> <!-- #advanced-options -->
+    </div>
 </div> <!-- #options -->
 
 <script type="text/javascript">
@@ -168,25 +156,11 @@
 
                     $("#no-mess-system").prop('checked', true);
                 }
-                if (result['gae_proxy_enable'] != 0) {
-                    $("#gae_proxy-enable").parent().removeClass('switch-off');
-                    $("#gae_proxy-enable").parent().addClass('switch-on');
-
-                    $("#gae_proxy-enable").prop('checked', true);
-                    //$("#gae_proxy-enable").prop('disabled', true);
-                    //$("#gae_proxy-enable").parent().parent().addClass("deactivate");
-                }
                 if (result['x_tunnel_enable'] != 0) {
                     $("#x-tunnel-enable").parent().removeClass('switch-off');
                     $("#x-tunnel-enable").parent().addClass('switch-on');
 
                     $("#x-tunnel-enable").prop('checked', true);
-                }
-                if (result['smart_router_enable'] != 0) {
-                    $("#smart-router-enable").parent().removeClass('switch-off');
-                    $("#smart-router-enable").parent().addClass('switch-on');
-
-                    $("#smart-router-enable").prop('checked', true);
                 }
                 $("#language").val(result['language']);
 
@@ -198,7 +172,6 @@
                     $("#popup_web_console").hide();
                     $("#show_systray").hide();
                     $("#run_as_green_software").hide();
-                    $("#smart_router_model").hide();
                 }
                 if (result['platform'] == 'ios') {
                     // currently not support,
@@ -289,25 +262,9 @@
         setConfig(key, value);
     });
 
-    $('#gae_proxy-enable').change(function () {
-        var isChecked = $(this).is(':checked'),
-            key       = 'gae_proxy_enable',
-            value     = isChecked ? 1 : 0;
-
-        setConfig(key, value);
-    });
-
     $('#x-tunnel-enable').change(function () {
         var isChecked = $(this).is(':checked'),
             key       = 'x_tunnel_enable',
-            value     = isChecked ? 1 : 0;
-
-        setConfig(key, value);
-    });
-
-    $('#smart-router-enable').change(function () {
-        var isChecked = $(this).is(':checked'),
-            key       = 'smart_router_enable',
             value     = isChecked ? 1 : 0;
 
         setConfig(key, value);

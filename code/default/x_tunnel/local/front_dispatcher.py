@@ -9,6 +9,10 @@ all_fronts = []
 light_fronts = []
 session_fronts = []
 cloudflare_front = None
+statistic_thread = None
+_initialized = False
+_statistic_running = False
+_init_lock = Lock()
 _front_fail_counts = defaultdict(int)
 _front_last_fail_time = defaultdict(float)
 FRONT_FAIL_BASE_PENALTY = 1000
@@ -28,54 +32,63 @@ xlog = getLogger("x_tunnel", log_path=data_xtunnel_path, save_start_log=500, sav
 
 
 def init():
-    global cloudflare_front
+    global cloudflare_front, statistic_thread, _initialized, _statistic_running
 
-    if g.config.enable_gae_proxy:
-        from . import gae_front
-        if gae_front.get_dispatcher():
-            all_fronts.append(gae_front)
-            session_fronts.append(gae_front)
-            light_fronts.append(gae_front)
+    with _init_lock:
+        if _initialized:
+            return
 
-    if g.config.enable_cloudflare:
-        from .cloudflare_front.front import front as _cloudflare_front
-        cloudflare_front = _cloudflare_front
-        all_fronts.append(cloudflare_front)
-        session_fronts.append(cloudflare_front)
-        light_fronts.append(cloudflare_front)
-        g.cloudflare_front = cloudflare_front
+        all_fronts[:] = []
+        session_fronts[:] = []
+        light_fronts[:] = []
+        g.cloudflare_front = None
+        g.cloudfront_front = None
+        g.seley_front = None
+        g.tls_relay_front = None
 
-    if g.config.enable_cloudfront:
-        from .cloudfront_front.front import front as cloudfront_front
-        all_fronts.append(cloudfront_front)
-        session_fronts.append(cloudfront_front)
-        light_fronts.append(cloudfront_front)
-        g.cloudfront_front = cloudfront_front
+        if g.config.enable_cloudflare:
+            from .cloudflare_front.front import front as _cloudflare_front
+            cloudflare_front = _cloudflare_front
+            all_fronts.append(cloudflare_front)
+            session_fronts.append(cloudflare_front)
+            light_fronts.append(cloudflare_front)
+            g.cloudflare_front = cloudflare_front
 
-    if g.config.enable_seley:
-        from .seley_front.front import front as seley_front
-        all_fronts.append(seley_front)
-        session_fronts.append(seley_front)
-        light_fronts.append(seley_front)
-        g.seley_front = seley_front
+        if g.config.enable_cloudfront:
+            from .cloudfront_front.front import front as cloudfront_front
+            all_fronts.append(cloudfront_front)
+            session_fronts.append(cloudfront_front)
+            light_fronts.append(cloudfront_front)
+            g.cloudfront_front = cloudfront_front
 
-    if g.config.enable_tls_relay:
-        from .tls_relay_front.front import front as tls_relay_front
-        all_fronts.append(tls_relay_front)
-        session_fronts.append(tls_relay_front)
-        light_fronts.append(tls_relay_front)
-        g.tls_relay_front = tls_relay_front
+        if g.config.enable_seley:
+            from .seley_front.front import front as seley_front
+            all_fronts.append(seley_front)
+            session_fronts.append(seley_front)
+            light_fronts.append(seley_front)
+            g.seley_front = seley_front
 
-    if g.config.enable_direct:
-        from . import direct_front
-        all_fronts.append(direct_front)
-        session_fronts.append(direct_front)
-        light_fronts.append(direct_front)
+        if g.config.enable_tls_relay:
+            from .tls_relay_front.front import front as tls_relay_front
+            all_fronts.append(tls_relay_front)
+            session_fronts.append(tls_relay_front)
+            light_fronts.append(tls_relay_front)
+            g.tls_relay_front = tls_relay_front
 
-    for front in all_fronts:
-        front.start()
+        if g.config.enable_direct:
+            from . import direct_front
+            all_fronts.append(direct_front)
+            session_fronts.append(direct_front)
+            light_fronts.append(direct_front)
 
-    threading.Thread(target=front_staticstic_thread, name="front_statistic_thread").start()
+        for front in all_fronts:
+            front.start()
+
+        _statistic_running = True
+        statistic_thread = threading.Thread(target=front_staticstic_thread, name="front_statistic_thread")
+        statistic_thread.daemon = True
+        statistic_thread.start()
+        _initialized = True
 
 
 def save_cloudflare_domain(domains):
@@ -91,7 +104,7 @@ def save_cloudflare_domain(domains):
 
 
 def front_staticstic_thread():
-    while g.running:
+    while g.running and _statistic_running:
         for front in all_fronts:
             dispatcher = front.get_dispatcher()
             if not dispatcher:
@@ -102,6 +115,7 @@ def front_staticstic_thread():
         time.sleep(3)
 
 get_front_lock = Lock()
+_front_ready_cond = threading.Condition(get_front_lock)
 
 def _get_front_penalty(front):
     fail_count = _front_fail_counts[front.name]
@@ -116,10 +130,17 @@ def _get_front_penalty(front):
 
 def _record_front_success(front):
     _front_fail_counts[front.name] = 0
+    notify_front_ready()
 
 def _record_front_fail(front):
     _front_fail_counts[front.name] += 1
     _front_last_fail_time[front.name] = time.time()
+    notify_front_ready()
+
+
+def notify_front_ready():
+    with _front_ready_cond:
+        _front_ready_cond.notify_all()
 
 def get_front(host, timeout):
     start_time = time.monotonic()
@@ -128,7 +149,7 @@ def get_front(host, timeout):
     else:
         fronts = session_fronts
 
-    with get_front_lock:
+    with _front_ready_cond:
         while time.monotonic() - start_time < timeout:
             best_front = None
             best_score = 999999999
@@ -158,7 +179,7 @@ def get_front(host, timeout):
             remaining = timeout - (time.monotonic() - start_time)
             if remaining <= 0:
                 break
-            time.sleep(min(0.005, remaining))
+            _front_ready_cond.wait(min(0.1, remaining))
 
     g.stat["timeout_roundtrip"] += 5
     return None
@@ -249,18 +270,32 @@ def set_session_host(host):
             continue
 
         dispatcher.set_session_host(host)
+    notify_front_ready()
 
 
 def stop():
     global all_fronts, light_fronts, session_fronts, cloudflare_front
+    global statistic_thread, _initialized, _statistic_running
     global _front_fail_counts, _front_last_fail_time
+
+    _statistic_running = False
 
     for front in all_fronts:
         front.stop()
+
+    if statistic_thread and statistic_thread.is_alive() and statistic_thread is not threading.current_thread():
+        statistic_thread.join(5)
 
     all_fronts = []
     light_fronts = []
     session_fronts = []
     cloudflare_front = None
+    statistic_thread = None
+    g.cloudflare_front = None
+    g.cloudfront_front = None
+    g.seley_front = None
+    g.tls_relay_front = None
+    _initialized = False
     _front_fail_counts.clear()
     _front_last_fail_time.clear()
+    notify_front_ready()

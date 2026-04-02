@@ -33,14 +33,8 @@
             messageTemplate = '{{ _( "Configuring the service[%s]. This page will refresh within %s seconds." ) }}';
 
         switch (serviceNameSlug) {
-            case 'gae_proxy_enable':
-                serviceName = '{{ _( "GAE Proxy" ) }}';
-                break;
             case 'x_tunnel_enable':
                 serviceName = '{{ _( "X-Tunnel" ) }}';
-                break;
-            case 'smart_router_enable':
-                serviceName = '{{ _( "Smart Router" ) }}';
                 break;
             default:
                 serviceName = 'Unknown';

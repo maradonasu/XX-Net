@@ -26,7 +26,31 @@ root_path = os.path.abspath(os.path.join(default_path, os.pardir, os.pardir))
 web_ui_path = os.path.join(current_path, os.path.pardir, "web_ui")
 
 import env_info
-data_path = os.path.join(env_info.data_path, 'smart_router')
+data_path = os.path.join(env_info.data_path, 'x_tunnel')
+_task_lock = threading.Lock()
+_background_tasks = {}
+
+
+def _start_background_task(name, target, args=()):
+    with _task_lock:
+        thread = _background_tasks.get(name)
+        if thread and thread.is_alive():
+            return False
+
+        def runner():
+            try:
+                target(*args)
+            finally:
+                with _task_lock:
+                    current = _background_tasks.get(name)
+                    if current is threading.current_thread():
+                        _background_tasks.pop(name, None)
+
+        thread = threading.Thread(target=runner, name=name)
+        thread.daemon = True
+        _background_tasks[name] = thread
+        thread.start()
+        return True
 
 
 def check_email(email):
@@ -212,8 +236,8 @@ class ControlHandler(simple_http_server.HttpServerHandler):
             xlog.debug("x_tunnel force update info")
             g.last_refresh_time = time_now
 
-            threading.Thread(target=proxy_session.request_balance, args=(None,None,False,False),
-                             name="info__request_balance").start()
+            _start_background_task("info__request_balance", proxy_session.request_balance,
+                                   args=(None, None, False, False))
 
             return self.response_json({
                 "res": "login_process"
@@ -370,7 +394,7 @@ class ControlHandler(simple_http_server.HttpServerHandler):
             })
             if not res:
                 xlog.warn("request reset password fail:%s", info)
-                threading.Thread(target=proxy_session.update_quota_loop).start()
+                _start_background_task("update_quota_loop", proxy_session.update_quota_loop)
                 return self.response_json({"res": "fail", "reason": info})
 
             self.response_json(info)
@@ -384,7 +408,7 @@ class ControlHandler(simple_http_server.HttpServerHandler):
             })
             if not res:
                 xlog.warn("reset password check fail:%s", info)
-                threading.Thread(target=proxy_session.update_quota_loop).start()
+                _start_background_task("update_quota_loop", proxy_session.update_quota_loop)
                 return self.response_json({"res": "fail", "reason": info})
 
             self.response_json(info)
@@ -401,7 +425,7 @@ class ControlHandler(simple_http_server.HttpServerHandler):
             })
             if not res:
                 xlog.warn("change password fail:%s", info)
-                threading.Thread(target=proxy_session.update_quota_loop).start()
+                _start_background_task("update_quota_loop", proxy_session.update_quota_loop)
                 return self.response_json({"res": "fail", "reason": info})
 
             self.response_json(info)
@@ -454,7 +478,7 @@ class ControlHandler(simple_http_server.HttpServerHandler):
                         g.server_port = g.config.server_port = 443
                         g.config.save()
 
-                        threading.Thread(target=g.session.reset).start()
+                        _start_background_task("session_reset", g.session.reset)
 
                     res = {"res": "success"}
                 else:
@@ -492,7 +516,7 @@ class ControlHandler(simple_http_server.HttpServerHandler):
         })
         if not res:
             xlog.warn("order fail:%s", info)
-            threading.Thread(target=proxy_session.update_quota_loop).start()
+            _start_background_task("update_quota_loop", proxy_session.update_quota_loop)
             return self.response_json({"res": "fail", "reason": info})
 
         self.response_json({"res": "success"})

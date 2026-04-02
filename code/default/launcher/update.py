@@ -26,8 +26,6 @@ update_url = "https://xxnet-update.appspot.com/update.json"
 
 update_content = ""
 update_dict = {}
-new_gae_proxy_version = ""
-gae_proxy_path = ""
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 root_path = os.path.abspath(os.path.join(current_path, os.pardir))
@@ -37,20 +35,11 @@ should_create_desktop_shortcut = True
 
 
 def get_opener():
-    autoproxy = '127.0.0.1:8086'
-
-    # import ssl
-    # if getattr(ssl, "create_default_context", None):
-    #     cafile = os.path.join(data_root, "gae_proxy", "CA.crt")
-    #     if not os.path.isfile(cafile):
-    #         cafile = None
-    #     context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH,
-    #                                          cafile=cafile)
-    #     https_handler = HTTPSHandler(context=context)
-    #
-    #     opener = build_opener(ProxyHandler({'http': autoproxy, 'https': autoproxy}), https_handler)
-    # else:
-    opener = build_opener(ProxyHandler({'http': autoproxy, 'https': autoproxy}))
+    if config.global_proxy_enable:
+        proxy = '%s:%s' % (config.global_proxy_host, config.global_proxy_port)
+        opener = build_opener(ProxyHandler({'http': proxy, 'https': proxy}))
+    else:
+        opener = build_opener(ProxyHandler({}))
     return opener
 
 
@@ -228,7 +217,7 @@ def download_module(module, new_version):
             break
 
     except Exception as e:
-        xlog.warn("get gae_proxy source fail, content:%s err:%s", update_content, e)
+        xlog.warn("get module source fail, content:%s err:%s", update_content, e)
 
 
 def ignore_module(module, new_version):
@@ -391,8 +380,6 @@ def check_new_machine():
 def update_check_loop():
     check_new_machine()
 
-    # wait gae_proxy to start
-    # update need gae_proxy as proxy
     time.sleep(500)
 
     while global_var.running:

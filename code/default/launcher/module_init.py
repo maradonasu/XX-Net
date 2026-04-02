@@ -25,7 +25,7 @@ running_file = os.path.join(data_launcher_path, "Running.Lck")
 
 def start(module):
     if module == "all":
-        modules = ["gae_proxy", "smart_router", "x_tunnel"]
+        modules = ["x_tunnel"]
         for m in modules:
             if not getattr(config,"enable_" + m):
                 continue

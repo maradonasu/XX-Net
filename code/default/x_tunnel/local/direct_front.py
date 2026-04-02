@@ -77,7 +77,7 @@ def request(method, host, schema="http", path="/", headers={}, data="", timeout=
     if data:
         headers["Content-Length"] = str(len(data))
 
-    # xlog.debug("gae_proxy %s %s", method, url)
+    # xlog.debug("direct_front %s %s", method, url)
     try:
         response = simple_http_client.request(method, url, headers, data, timeout=timeout)
         if response.status != 200:

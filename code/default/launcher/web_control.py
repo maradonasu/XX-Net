@@ -77,7 +77,7 @@ class Http_Handler(simple_http_server.HttpServerHandler):
             if getattr(config, "enable_" + module) != 1:
                 continue
 
-            menu_path = os.path.join(default_path, module, "web_ui", "menu.json")  # launcher & gae_proxy modules
+            menu_path = os.path.join(default_path, module, "web_ui", "menu.json")
             if not os.path.isfile(menu_path):
                 continue
 
@@ -278,8 +278,6 @@ class Http_Handler(simple_http_server.HttpServerHandler):
                 return self.req_log_handler()
             elif url_path == "/keep_log":
                 return self.req_keep_log_handler()
-            elif url_path == "/suck_threads":
-                return self.req_suck_threads()
             elif url_path == "/hold_8085":
                 return self.req_hold_8085()
             elif url_path == '/update':
@@ -334,12 +332,6 @@ class Http_Handler(simple_http_server.HttpServerHandler):
             if config.enable_x_tunnel:
                 target_module = 'x_tunnel'
                 target_menu = 'config'
-            # elif config.get(['modules', 'smart_router', 'auto_start'], 0) == 1:
-            #     target_module = 'smart_router'
-            #     target_menu = 'config'
-            elif config.enable_gae_proxy:
-                target_module = 'gae_proxy'
-                target_menu = 'status'
             else:
                 target_module = 'launcher'
                 target_menu = 'about'
@@ -389,7 +381,7 @@ class Http_Handler(simple_http_server.HttpServerHandler):
         else:
             right_content = b""
 
-        data = index_content % (config.enable_gae_proxy, menu_content, right_content)
+        data = index_content % (config.enable_x_tunnel, menu_content, right_content)
         self.send_response('text/html', data)
 
     def req_config_handler(self):
@@ -415,10 +407,8 @@ class Http_Handler(simple_http_server.HttpServerHandler):
                 "show_systray": config.show_systray,
                 "show_android_notification": config.show_android_notification,
                 "auto_start": config.auto_start,
-                "show_detail": config.gae_show_detail,
-                "gae_proxy_enable": config.enable_gae_proxy,
+                "show_detail": config.show_detail,
                 "x_tunnel_enable": config.enable_x_tunnel,
-                "smart_router_enable": config.enable_smart_router,
                 "system-proxy": config.os_proxy_mode,
                 "show-compat-suggest": config.show_compat_suggest,
                 "no_mess_system": config.no_mess_system,
@@ -567,27 +557,9 @@ class Http_Handler(simple_http_server.HttpServerHandler):
                 if show_detail != 0 and show_detail != 1:
                     data = '{"res":"fail, show_detail:%s"}' % show_detail
                 else:
-                    config.gae_show_detail = show_detail
+                    config.show_detail = show_detail
                     config.save()
 
-                    data = '{"res":"success"}'
-            elif 'gae_proxy_enable' in reqs:
-                gae_proxy_enable = int(reqs['gae_proxy_enable'])
-                if gae_proxy_enable != 0 and gae_proxy_enable != 1:
-                    data = '{"res":"fail, gae_proxy_enable:%s"}' % gae_proxy_enable
-                else:
-                    config.enable_gae_proxy = gae_proxy_enable
-                    config.save()
-                    if gae_proxy_enable:
-                        module_init.start("gae_proxy")
-                    else:
-                        module_init.stop("gae_proxy")
-
-                    if config.enable_smart_router:
-                        module_init.stop("smart_router")
-                        module_init.start("smart_router")
-
-                    self.load_module_menus()
                     data = '{"res":"success"}'
             elif 'x_tunnel_enable' in reqs:
                 x_tunnel_enable = int(reqs['x_tunnel_enable'])
@@ -600,19 +572,6 @@ class Http_Handler(simple_http_server.HttpServerHandler):
                         module_init.start("x_tunnel")
                     else:
                         module_init.stop("x_tunnel")
-                    self.load_module_menus()
-                    data = '{"res":"success"}'
-            elif 'smart_router_enable' in reqs:
-                smart_router_enable = int(reqs['smart_router_enable'])
-                if smart_router_enable != 0 and smart_router_enable != 1:
-                    data = '{"res":"fail, smart_router_enable:%s"}' % smart_router_enable
-                else:
-                    config.enable_smart_router = smart_router_enable
-                    config.save()
-                    if smart_router_enable:
-                        module_init.start("smart_router")
-                    else:
-                        module_init.stop("smart_router")
                     self.load_module_menus()
                     data = '{"res":"success"}'
             elif 'postUpdateStat' in reqs:
@@ -837,9 +796,7 @@ class Http_Handler(simple_http_server.HttpServerHandler):
         self.send_response(mimetype, data)
 
     def req_suck_threads(self):
-        self.send_response('text/plain', "Start suck threads")
-        while True:
-            threading.Thread(target=time.sleep, args=(1000,)).start()
+        return self.send_not_found()
 
     def req_hold_8085(self):
         global server

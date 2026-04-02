@@ -15,7 +15,7 @@ from front_base.http_dispatcher import HttpsDispatcher
 from front_base.connect_manager import ConnectManager
 from front_base.check_ip import CheckIp
 from .http2_connection import CloudflareHttp2Worker
-from gae_proxy.local import check_local_network
+from .. import check_local_network
 
 data_path = env_info.data_path
 module_data_path = os.path.join(data_path, 'x_tunnel')

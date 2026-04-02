@@ -12,8 +12,8 @@ from . import ip_manager
 from front_base.openssl_wrap import SSLContext
 from front_base.http_dispatcher import HttpsDispatcher
 from front_base.connect_manager import ConnectManager
-from gae_proxy.local import check_local_network
 from . import http2_stream
+from .. import check_local_network
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 data_path = env_info.data_path

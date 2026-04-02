@@ -35,7 +35,7 @@
     var head = document.getElementsByTagName('head')[0];
     head.appendChild(meta);
 
-    var gae_enabled = %d;
+    var x_tunnel_enabled = %d;
 </script>
 <body>
 <div id="header" class="navbar navbar-inverse navbar-fixed-top">
@@ -417,7 +417,7 @@
                 if (result && (result['res'] === 'success')) {
                     if (key === 'postUpdateStat') return;
                     tip('{{ _( "Settings saved successfully." ) }}', 'success');
-                    if (key === 'gae_proxy_enable' || key === 'x_tunnel_enable' || key === 'smart_router_enable') {
+                    if (key === 'x_tunnel_enable') {
                         restartingService(key); //call from config.html
                     }
                 } else {

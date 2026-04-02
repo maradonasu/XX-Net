@@ -14,9 +14,6 @@ sys.path.append(noarch_lib)
 
 import utils
 import simple_http_server
-from dnslib.dns import DNSRecord, DNSHeader, DNSQuestion
-import socket
-
 import simple_http_client
 from xlog import getLogger
 xlog = getLogger("test")
@@ -69,10 +66,6 @@ class ServiceTesting(object):
     def run(self):
         self.get_xxnet_web_console()
         self.xtunnel_logout()
-        self.smart_route_dns_query()
-        self.smart_route_proxy_http()
-        self.smart_route_proxy_socks4()
-        self.smart_route_proxy_socks5()
 
         self.xtunnel_token_login()
         self.xtunnel_proxy_http()
@@ -126,54 +119,6 @@ class ServiceTesting(object):
         self.assertEqual(res.status, 200)
         self.xtunnel_login_status = False
         xlog.info("Finished testing XTunnel logout")
-
-    def smart_route_proxy_http(self):
-        xlog.info("Start testing SmartRouter HTTP proxy protocol")
-        proxy = "http://localhost:8086"
-        res = simple_http_client.request("GET", "https://github.com/", proxy=proxy, timeout=20)
-        self.assertEqual(res.status, 200)
-        xlog.info("Finished testing SmartRouter HTTP proxy protocol")
-
-    def smart_route_proxy_socks4(self):
-        xlog.info("Start testing SmartRouter SOCKS4 proxy protocol")
-        proxy = "socks4://localhost:8086"
-        res = simple_http_client.request("GET", "https://github.com/", proxy=proxy, timeout=15)
-        self.assertEqual(res.status, 200)
-        xlog.info("Finished testing SmartRouter SOCKS4 proxy protocol")
-
-    def smart_route_proxy_socks5(self):
-        xlog.info("Start testing SmartRouter SOCKS5 proxy protocol")
-        proxy = "socks5://localhost:8086"
-        res = simple_http_client.request("GET", "https://github.com/", proxy=proxy, timeout=15)
-        self.assertEqual(res.status, 200)
-        xlog.info("Finished testing SmartRouter SOCKS5 proxy protocol")
-
-    def smart_route_dns_query(self):
-        xlog.info("Start testing SmartRouter DNS Query")
-        domain = "appsec.hicloud.com"
-        d = DNSRecord(DNSHeader(123))
-        d.add_question(DNSQuestion(domain, 1))
-        req4_pack = d.pack()
-
-        for port in [8053, 53]:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(req4_pack, ("127.0.0.1", port))
-            sock.settimeout(5)
-
-            try:
-                response, server = sock.recvfrom(8192)
-            except Exception as e:
-                xlog.warn("recv fail for port:%s e:%r", port, e)
-                continue
-
-            p = DNSRecord.parse(response)
-            for r in p.rr:
-                ip = utils.to_bytes(str(r.rdata))
-                xlog.info("IP:%s" % ip)
-                self.assertEqual(utils.check_ip_valid(ip), True)
-
-            xlog.info("Finished testing SmartRouter DNS Query")
-            return
 
     def xtunnel_token_login(self):
         xlog.info("Start testing XTunnel login")

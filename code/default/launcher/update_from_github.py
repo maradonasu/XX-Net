@@ -56,26 +56,16 @@ init_update_info(config.check_update)
 
 
 def request(url, retry=0, timeout=30):
-    if retry == 0:
-        if config.global_proxy_enable == 1:
-            client = simple_http_client.Client(proxy={
-                "type": config.global_proxy_type,
-                "host": config.global_proxy_host,
-                "port": config.global_proxy_port,
-                "user": config.global_proxy_username,
-                "pass": config.global_proxy_password,
-            }, timeout=timeout)
-        else:
-            client = simple_http_client.Client(timeout=timeout)
-    else:
-        cert = os.path.join(data_root, "gae_proxy", "CA.crt")
+    if config.global_proxy_enable == 1:
         client = simple_http_client.Client(proxy={
-            "type": "http",
-            "host": "127.0.0.1",
-            "port": 8086,
-            "user": None,
-            "pass": None
-        }, timeout=timeout, cert=cert)
+            "type": config.global_proxy_type,
+            "host": config.global_proxy_host,
+            "port": config.global_proxy_port,
+            "user": config.global_proxy_username,
+            "pass": config.global_proxy_password,
+        }, timeout=timeout)
+    else:
+        client = simple_http_client.Client(timeout=timeout)
 
     res = client.request("GET", url, read_payload=False)
     return res
@@ -474,21 +464,9 @@ def cleanup():
         del_paths += [
             "code/*/lib/linux/"
         ]
-    if config.del_gae:
-        del_paths += [
-            "code/*/gae_proxy/"
-        ]
-    if config.del_gae_server:
-        del_paths += [
-            "code/*/gae_proxy/server/"
-        ]
     if config.del_xtunnel:
         del_paths += [
             "code/*/x_tunnel/"
-        ]
-    if config.del_smartroute:
-        del_paths += [
-            "code/*/smart_router/"
         ]
 
     if del_paths:

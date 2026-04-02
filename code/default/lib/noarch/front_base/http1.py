@@ -293,7 +293,7 @@ class Http1Worker(HttpWorker):
     def close(self, reason=""):
         # Notify loop to exit
         # This function may be call by outside http2
-        # When gae_proxy found the appid or ip is wrong
+        # When the upstream marks the connection unusable
         self.task_queue.put(None)
 
         if self.task is not None:

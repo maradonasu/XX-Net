@@ -85,13 +85,13 @@ def load_config():
     config.set_var("timeout_threshold", 2)
     config.set_var("report_interval", 5 * 60)
 
-    config.set_var("enable_gae_proxy", 0)
     config.set_var("enable_cloudflare", 1)
     config.set_var("enable_cloudfront", 0)
     config.set_var("enable_seley", 1)
     config.set_var("enable_tls_relay", 1)
     config.set_var("enable_direct", 0)
     config.set_var("local_auto_front", 1)
+    config.set_var("check_local_network_rules", "normal")
 
     config.load()
 

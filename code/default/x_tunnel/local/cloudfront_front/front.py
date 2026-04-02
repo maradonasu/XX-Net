@@ -14,7 +14,7 @@ from front_base.check_ip import CheckIp
 from .connect_creator import ConnectCreator
 from .config import Config
 from . import host_manager
-from gae_proxy.local import check_local_network
+from .. import check_local_network
 import env_info
 
 current_path = os.path.dirname(os.path.abspath(__file__))

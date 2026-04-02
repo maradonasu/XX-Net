@@ -37,10 +37,6 @@ def create_data_path():
     if not os.path.isdir(data_launcher_path):
         os.mkdir(data_launcher_path)
 
-    data_gae_proxy_path = os.path.join(data_path, 'gae_proxy')
-    if not os.path.isdir(data_gae_proxy_path):
-        os.mkdir(data_gae_proxy_path)
-
 
 create_data_path()
 

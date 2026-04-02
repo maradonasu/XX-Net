@@ -172,16 +172,6 @@ div#content div.tab-content {
     padding: 20px 10px;
 }
 
-/* Style for config.html in PHP-Proxy */
-div#content form#gae_proxy-php-config div.row-fluid div.span4 label[for=enable-php-proxy] {
-    margin-top: 5px;
-}
-
-div#content form#gae_proxy-php-config div.row-fluid div.span4 label[for=enable-php-proxy] > a {
-    font-weight: normal;
-    text-decoration: none;
-}
-
 /* Style for status.html */
 table#status td {
     word-wrap: break-word;

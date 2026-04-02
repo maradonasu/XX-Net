@@ -41,10 +41,7 @@ class MacTrayObject(AppKit.NSObject):
         self.registerObserver()
 
     def setupUI(self):
-        self.autoGaeProxyMenuItem = None
-        self.globalGaeProxyMenuItem = None
         self.globalXTunnelMenuItem = None
-        self.globalSmartRouterMenuItem = None
 
         self.statusbar = AppKit.NSStatusBar.systemStatusBar()
         self.statusitem = self.statusbar.statusItemWithLength_(
@@ -74,21 +71,6 @@ class MacTrayObject(AppKit.NSObject):
         self.menu.addItem_(menuitem)
         self.currentServiceMenuItem = menuitem
 
-        if config.enable_gae_proxy == 1:
-            menuitem = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_('Enable Auto GAEProxy',
-                                                                                     'enableAutoProxy:', '')
-            if proxyState == 'pac':
-                menuitem.setState_(AppKit.NSOnState)
-            self.menu.addItem_(menuitem)
-            self.autoGaeProxyMenuItem = menuitem
-
-            menuitem = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_('Enable Global GAEProxy',
-                                                                                     'enableGlobalProxy:', '')
-            if proxyState == 'gae':
-                menuitem.setState_(AppKit.NSOnState)
-            self.menu.addItem_(menuitem)
-            self.globalGaeProxyMenuItem = menuitem
-
         if config.enable_x_tunnel == 1:
             menuitem = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_('Enable Global X-Tunnel',
                                                                                      'enableGlobalXTunnel:', '')
@@ -96,14 +78,6 @@ class MacTrayObject(AppKit.NSObject):
                 menuitem.setState_(AppKit.NSOnState)
             self.menu.addItem_(menuitem)
             self.globalXTunnelMenuItem = menuitem
-
-        if config.enable_smart_router == 1:
-            menuitem = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_('Enable Global Smart-Router',
-                                                                                     'enableGlobalSmartRouter:', '')
-            if proxyState == 'smart_router':
-                menuitem.setState_(AppKit.NSOnState)
-            self.menu.addItem_(menuitem)
-            self.globalSmartRouterMenuItem = menuitem
 
         menuitem = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_('Disable Proxy', 'disableProxy:',
                                                                                  '')
@@ -129,28 +103,16 @@ class MacTrayObject(AppKit.NSObject):
         self.currentServiceMenuItem.setTitle_(getCurrentServiceMenuItemTitle())
 
         # Remove Tick before All Menu Items
-        if self.autoGaeProxyMenuItem:
-            self.autoGaeProxyMenuItem.setState_(AppKit.NSOffState)
-        if self.globalGaeProxyMenuItem:
-            self.globalGaeProxyMenuItem.setState_(AppKit.NSOffState)
         if self.globalXTunnelMenuItem:
             self.globalXTunnelMenuItem.setState_(AppKit.NSOffState)
-        if self.globalSmartRouterMenuItem:
-            self.globalSmartRouterMenuItem.setState_(AppKit.NSOffState)
         self.disableGaeProxyMenuItem.setState_(AppKit.NSOffState)
 
         # Get current selected mode
         proxyState = getProxyState(currentService)
 
         # Update Tick before Menu Item
-        if proxyState == 'pac' and self.autoGaeProxyMenuItem:
-            self.autoGaeProxyMenuItem.setState_(AppKit.NSOnState)
-        elif proxyState == 'gae' and self.globalGaeProxyMenuItem:
-            self.globalGaeProxyMenuItem.setState_(AppKit.NSOnState)
-        elif proxyState == 'x_tunnel' and self.globalXTunnelMenuItem:
+        if proxyState == 'x_tunnel' and self.globalXTunnelMenuItem:
             self.globalXTunnelMenuItem.setState_(AppKit.NSOnState)
-        elif proxyState == 'smart_router' and self.globalSmartRouterMenuItem:
-            self.globalSmartRouterMenuItem.setState_(AppKit.NSOnState)
         else:
             self.disableGaeProxyMenuItem.setState_(AppKit.NSOnState)
 
@@ -158,10 +120,7 @@ class MacTrayObject(AppKit.NSObject):
         self.menu.update()
 
     def validateMenuItem_(self, menuItem):
-        return currentService or (menuItem != self.autoGaeProxyMenuItem and
-                                  menuItem != self.globalGaeProxyMenuItem and
-                                  menuItem != self.globalXTunnelMenuItem and
-                                  menuItem != self.globalSmartRouterMenuItem and
+        return currentService or (menuItem != self.globalXTunnelMenuItem and
                                   menuItem != self.disableGaeProxyMenuItem)
 
     def presentAlert_withTitle_(self, msg, title):
@@ -201,47 +160,12 @@ class MacTrayObject(AppKit.NSObject):
         module_init.stop_all()
         module_init.start_all_auto()
 
-    def enableAutoProxy_(self, _):
-        try:
-            helperDisableGlobalProxy(currentService)
-            helperEnableAutoProxy(currentService)
-        except:
-            disableGlobalProxyCommand = getDisableGlobalProxyCommand(currentService)
-            enableAutoProxyCommand = getEnableAutoProxyCommand(currentService)
-            executeCommand = 'do shell script "%s;%s" with administrator privileges' % (
-            disableGlobalProxyCommand, enableAutoProxyCommand)
-
-            xlog.info("try enable auto proxy:%s", executeCommand)
-            subprocess.call(['osascript', '-e', executeCommand])
-        config.os_proxy_mode = "pac"
-        config.save()
-        self.updateStatusBarMenu()
-
-    def enableGlobalProxy_(self, _):
-        try:
-            helperDisableAutoProxy(currentService)
-            helperEnableGlobalProxy(currentService)
-        except:
-            disableAutoProxyCommand = getDisableAutoProxyCommand(currentService)
-            enableGlobalProxyCommand = getEnableGlobalProxyCommand(currentService)
-            executeCommand = 'do shell script "%s;%s" with administrator privileges' % (
-            disableAutoProxyCommand, enableGlobalProxyCommand)
-
-            xlog.info("try enable global proxy:%s", executeCommand)
-            subprocess.call(['osascript', '-e', executeCommand])
-        config.os_proxy_mode = "gae"
-        config.save()
-        self.updateStatusBarMenu()
-
     def enableGlobalXTunnel_(self, _):
         try:
-            helperDisableAutoProxy(currentService)
             helperEnableXTunnelProxy(currentService)
         except:
-            disableAutoProxyCommand = getDisableAutoProxyCommand(currentService)
             enableXTunnelProxyCommand = getEnableXTunnelProxyCommand(currentService)
-            executeCommand = 'do shell script "%s;%s" with administrator privileges' % (
-            disableAutoProxyCommand, enableXTunnelProxyCommand)
+            executeCommand = 'do shell script "%s" with administrator privileges' % enableXTunnelProxyCommand
 
             xlog.info("try enable global x-tunnel proxy:%s", executeCommand)
             subprocess.call(['osascript', '-e', executeCommand])
@@ -249,31 +173,12 @@ class MacTrayObject(AppKit.NSObject):
         config.save()
         self.updateStatusBarMenu()
 
-    def enableGlobalSmartRouter_(self, _):
-        try:
-            helperDisableAutoProxy(currentService)
-            helperEnableSmartRouterProxy(currentService)
-        except:
-            disableAutoProxyCommand = getDisableAutoProxyCommand(currentService)
-            enableSmartRouterCommand = getEnableSmartRouterProxyCommand(currentService)
-            executeCommand = 'do shell script "%s;%s" with administrator privileges' % (
-            disableAutoProxyCommand, enableSmartRouterCommand)
-
-            xlog.info("try enable global smart-router proxy:%s", executeCommand)
-            subprocess.call(['osascript', '-e', executeCommand])
-        config.os_proxy_mode = "smart_router"
-        config.save()
-        self.updateStatusBarMenu()
-
     def disableProxy_(self, is_quit=False):
         try:
-            helperDisableAutoProxy(currentService)
             helperDisableGlobalProxy(currentService)
         except:
-            disableAutoProxyCommand = getDisableAutoProxyCommand(currentService)
             disableGlobalProxyCommand = getDisableGlobalProxyCommand(currentService)
-            executeCommand = 'do shell script "%s;%s" with administrator privileges' % (
-            disableAutoProxyCommand, disableGlobalProxyCommand)
+            executeCommand = 'do shell script "%s" with administrator privileges' % disableGlobalProxyCommand
 
             xlog.info("try disable proxy:%s", executeCommand)
             subprocess.call(['osascript', '-e', executeCommand])
@@ -318,48 +223,17 @@ def getProxyState(service):
 
     # Check if auto proxy is enabled
     executeResult = subprocess.check_output(['networksetup', '-getautoproxyurl', service])
-    if (executeResult.find(b'http://127.0.0.1:8086/proxy.pac\nEnabled: Yes') != -1):
-        return "pac"
-
-    # Check if global proxy is enabled
     executeResult = subprocess.check_output(['networksetup', '-getwebproxy', service])
-    if (executeResult.find(b'Enabled: Yes\nServer: 127.0.0.1\nPort: 8087') != -1):
-        return "gae"
-
-    # Check if global proxy is enabled
     if (executeResult.find(b'Enabled: Yes\nServer: 127.0.0.1\nPort: 1080') != -1):
         return "x_tunnel"
-
-    if (executeResult.find(b'Enabled: Yes\nServer: 127.0.0.1\nPort: 8086') != -1):
-        return "smart_router"
 
     return "disable"
 
 
 # Generate commands for Apple Script
-def getEnableAutoProxyCommand(service):
-    return "networksetup -setautoproxyurl \\\"%s\\\" \\\"http://127.0.0.1:8086/proxy.pac\\\"" % service
-
-
-def getDisableAutoProxyCommand(service):
-    return "networksetup -setautoproxystate \\\"%s\\\" off" % service
-
-
-def getEnableGlobalProxyCommand(service):
-    enableHttpProxyCommand = "networksetup -setwebproxy \\\"%s\\\" 127.0.0.1 8087" % service
-    enableHttpsProxyCommand = "networksetup -setsecurewebproxy \\\"%s\\\" 127.0.0.1 8087" % service
-    return "%s;%s" % (enableHttpProxyCommand, enableHttpsProxyCommand)
-
-
 def getEnableXTunnelProxyCommand(service):
     enableHttpProxyCommand = "networksetup -setwebproxy \\\"%s\\\" 127.0.0.1 1080" % service
     enableHttpsProxyCommand = "networksetup -setsecurewebproxy \\\"%s\\\" 127.0.0.1 1080" % service
-    return "%s;%s" % (enableHttpProxyCommand, enableHttpsProxyCommand)
-
-
-def getEnableSmartRouterProxyCommand(service):
-    enableHttpProxyCommand = "networksetup -setwebproxy \\\"%s\\\" 127.0.0.1 8086" % service
-    enableHttpsProxyCommand = "networksetup -setsecurewebproxy \\\"%s\\\" 127.0.0.1 8086" % service
     return "%s;%s" % (enableHttpProxyCommand, enableHttpsProxyCommand)
 
 
@@ -369,28 +243,9 @@ def getDisableGlobalProxyCommand(service):
     return "%s;%s" % (disableHttpProxyCommand, disableHttpsProxyCommand)
 
 
-# Call helper
-def helperEnableAutoProxy(service):
-    subprocess.check_call([helper_path, 'enableauto', service, 'http://127.0.0.1:8086/proxy.pac'])
-
-
-def helperDisableAutoProxy(service):
-    subprocess.check_call([helper_path, 'disableauto', service])
-
-
-def helperEnableGlobalProxy(service):
-    subprocess.check_call([helper_path, 'enablehttp', service, '127.0.0.1', '8087'])
-    subprocess.check_call([helper_path, 'enablehttps', service, '127.0.0.1', '8087'])
-
-
 def helperEnableXTunnelProxy(service):
     subprocess.check_call([helper_path, 'enablehttp', service, '127.0.0.1', '1080'])
     subprocess.check_call([helper_path, 'enablehttps', service, '127.0.0.1', '1080'])
-
-
-def helperEnableSmartRouterProxy(service):
-    subprocess.check_call([helper_path, 'enablehttp', service, '127.0.0.1', '8086'])
-    subprocess.check_call([helper_path, 'enablehttps', service, '127.0.0.1', '8086'])
 
 
 def helperDisableGlobalProxy(service):
@@ -405,23 +260,10 @@ def loadConfig():
     if getProxyState(currentService) == proxy_setting:
         return
     try:
-        if proxy_setting == "pac" and config.enable_smart_router:
-            helperDisableGlobalProxy(currentService)
-            helperEnableAutoProxy(currentService)
-        elif proxy_setting == "gae" and config.enable_gae_proxy:
-            helperDisableAutoProxy(currentService)
-            helperEnableGlobalProxy(currentService)
-        elif proxy_setting == "x_tunnel" and config.enable_x_tunnel:
-            helperDisableAutoProxy(currentService)
+        if proxy_setting == "x_tunnel" and config.enable_x_tunnel:
             helperEnableXTunnelProxy(currentService)
-        elif proxy_setting == "smart_router" and config.enable_smart_router:
-            helperDisableAutoProxy(currentService)
-            helperEnableSmartRouterProxy(currentService)
         else:
-            helperDisableAutoProxy(currentService)
             helperDisableGlobalProxy(currentService)
-        # else:
-        #     xlog.warn("proxy_setting:%r", proxy_setting)
     except Exception as e:
         xlog.warn("helper failed:%r, please manually reset proxy settings after switching connection", e)
 
