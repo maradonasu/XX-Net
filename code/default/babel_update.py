@@ -13,7 +13,7 @@ translator = Translator(service_urls=[
     ])
 
 for lang in ["ru_RU"]:  # "fa_IR",
-    for module in ["launcher", "smart_router", "x_tunnel"]:  #
+    for module in ["launcher", "x_tunnel"]:
         source_po = polib.pofile(f'{module}/lang/zh_CN/LC_MESSAGES/messages.po')
         lang_path = f'{module}/lang/{lang}/LC_MESSAGES'
         if not os.path.isdir(lang_path):
