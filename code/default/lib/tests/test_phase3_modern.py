@@ -59,3 +59,23 @@ class TestTypeAnnotations(TestCase):
         self.assertIn('from typing import', content)
         self.assertIn('def __init__(self, s: Optional[bytes]', content)
         self.assertIn('def __init__(self, session: Any, xlog: Any)', content)
+
+    def test_proxy_handler_has_type_annotations(self):
+        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'proxy_handler.py')
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('from __future__ import annotations', content)
+        self.assertIn('from typing import', content)
+        self.assertIn('def netloc_to_host_port(netloc: ', content)
+        self.assertIn('def __init__(self, sock: socket.socket', content)
+        self.assertIn('def read_bytes(self, size: int)', content)
+
+    def test_proxy_session_has_type_annotations(self):
+        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'proxy_session.py')
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('from typing import', content)
+        self.assertIn('def encrypt_data(data: ', content)
+        self.assertIn('def decrypt_data(data: ', content)
+        self.assertIn('def create_conn(self, sock: socket.socket', content)
+        self.assertIn('def login_session(self) -> bool', content)

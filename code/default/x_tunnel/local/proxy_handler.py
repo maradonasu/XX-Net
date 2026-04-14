@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+from __future__ import annotations
+
 import time
 import socket
 import struct
 import select
+from typing import Tuple, Union
 
 from urllib.parse import urlparse
 
@@ -20,7 +23,7 @@ POLL_TIMEOUT = 0.1
 READ_TIMEOUT = 30
 
 
-def netloc_to_host_port(netloc, default_port=80):
+def netloc_to_host_port(netloc: Union[str, bytes], default_port: int = 80) -> Tuple[bytes, int]:
     if isinstance(netloc, str):
         netloc = netloc.encode("ascii")
 
@@ -34,18 +37,18 @@ def netloc_to_host_port(netloc, default_port=80):
 
 
 class Socks5Server():
-    handle_num = 0
+    handle_num: int = 0
 
-    def __init__(self, sock, client, args):
-        self.connection = sock
+    def __init__(self, sock: socket.socket, client: Tuple[str, int], args: object) -> None:
+        self.connection: socket.socket = sock
         self.rfile = self.connection.makefile("rb", -1)
         self.wfile = self.connection.makefile("wb", 0)
-        self.client_address = client
-        self.read_buffer = b""
-        self.buffer_start = 0
-        self.args = args
+        self.client_address: Tuple[str, int] = client
+        self.read_buffer: bytes = b""
+        self.buffer_start: int = 0
+        self.args: object = args
 
-    def handle(self):
+    def handle(self) -> None:
         self.__class__.handle_num += 1
         try:
             socks_version = self.read_bytes(1)
@@ -72,7 +75,7 @@ class Socks5Server():
             xlog.exception("proxy handler err:%r", e)
             self.connection.close()
 
-    def _recv_with_timeout(self, size=8192, timeout=READ_TIMEOUT):
+    def _recv_with_timeout(self, size: int = 8192, timeout: float = READ_TIMEOUT) -> bytes:
         sock = self.connection
         end_time = time.time() + timeout
         while time.time() < end_time:
@@ -86,7 +89,7 @@ class Socks5Server():
             time.sleep(0.001)
         raise socket.error("recv timeout")
 
-    def read_null_end_line(self):
+    def read_null_end_line(self) -> bytes:
         sock = self.connection
         while True:
             n1 = self.read_buffer.find(b"\x00", self.buffer_start)
@@ -100,7 +103,7 @@ class Socks5Server():
                 raise socket.error("recv fail")
             self.read_buffer += data
 
-    def read_crlf_line(self):
+    def read_crlf_line(self) -> bytes:
         while True:
             n1 = self.read_buffer.find(b"\r\n", self.buffer_start)
             if n1 > -1:
@@ -113,7 +116,7 @@ class Socks5Server():
                 raise socket.error("recv fail")
             self.read_buffer += data
 
-    def read_headers(self):
+    def read_headers(self) -> bytes:
         while True:
             if len(self.read_buffer) > self.buffer_start and self.read_buffer[self.buffer_start:] == b"\r\n":
                 self.buffer_start += 2
@@ -130,7 +133,7 @@ class Socks5Server():
                 raise socket.error("recv fail")
             self.read_buffer += data
 
-    def read_bytes(self, size):
+    def read_bytes(self, size: int) -> bytes:
         while True:
             left = len(self.read_buffer) - self.buffer_start
             if left >= size:
@@ -147,7 +150,7 @@ class Socks5Server():
         self.buffer_start += size
         return data
 
-    def socks4_handler(self):
+    def socks4_handler(self) -> None:
         # Socks4 or Socks4a
         sock = self.connection
         cmd = ord(self.read_bytes(1))
@@ -189,7 +192,7 @@ class Socks5Server():
 
         g.session.conn_list[conn_id].start(block=True)
 
-    def socks5_handler(self):
+    def socks5_handler(self) -> None:
         sock = self.connection
         auth_mode_num = ord(self.read_bytes(1))
         data = self.read_bytes(auth_mode_num)
@@ -256,7 +259,7 @@ class Socks5Server():
 
         g.session.conn_list[conn_id].start(block=True)
 
-    def https_handler(self):
+    def https_handler(self) -> None:
         line = self.read_crlf_line()
         line = line.decode('iso-8859-1')
         words = line.split()
@@ -297,7 +300,7 @@ class Socks5Server():
 
         g.session.conn_list[conn_id].start(block=True)
 
-    def http_handler(self, first_char):
+    def http_handler(self, first_char: bytes) -> None:
         req_line = self.read_crlf_line()
         words = req_line.split()
         if len(words) == 3:
