@@ -49,7 +49,7 @@ class Win_tray():
             AutoConfigURL, reg_type = winreg.QueryValueEx(self.INTERNET_SETTINGS, 'AutoConfigURL')
             if AutoConfigURL:
                 return "unknown"
-        except:
+        except OSError:
             pass
 
         try:
@@ -60,7 +60,7 @@ class Win_tray():
                     return "x_tunnel"
                 else:
                     return "unknown"
-        except:
+        except OSError:
             pass
 
         return "disable"

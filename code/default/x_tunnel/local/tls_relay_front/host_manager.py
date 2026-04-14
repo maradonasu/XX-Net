@@ -18,7 +18,7 @@ class HostManager(HostManagerBase):
         try:
             with open(self.config_fn, "r") as fd:
                 self.info = json.load(fd)
-        except:
+        except Exception:
             pass
 
     def save(self):

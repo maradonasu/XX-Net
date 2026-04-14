@@ -108,7 +108,7 @@ def _get_os_language():
             elif b'ru' in lang_code:
                 return 'ru_RU'
 
-        except:
+        except (subprocess.SubprocessError, OSError):
             pass
     elif sys_platform.platform == "android":
         try:
@@ -146,8 +146,7 @@ def _get_os_language():
             lang_code, code_page = locale.getdefaultlocale()
             # ('en_GB', 'cp1252'), en_US,
             return lang_code
-        except:
-            # Mac fail to run this
+        except Exception:
             pass
 
 

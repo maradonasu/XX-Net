@@ -13,7 +13,7 @@ import atexit
 import threading
 try:
     threading.stack_size(64 * 1024)
-except:
+except Exception:
     pass
 
 

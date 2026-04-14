@@ -289,7 +289,7 @@ class Socks5Server():
         xlog.info("https %r connect to %s:%d conn:%d", self.client_address, host, port, conn_id)
         try:
             sock.send(b'HTTP/1.1 200 OK\r\n\r\n')
-        except:
+        except Exception:
             xlog.warn("https %r connect to %s:%d conn:%d closed.", self.client_address, host, port, conn_id)
 
         if (len(self.read_buffer) - self.buffer_start) > 0:

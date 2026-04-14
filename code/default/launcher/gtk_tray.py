@@ -34,7 +34,7 @@ try:
 
     use_gi = False
     xlog.info('Using PyGTK as the GUI Backend.')
-except:
+except ImportError:
     # How to install gi:
     # The simple way:
     #    sudo apt-get install python3-gi
@@ -67,7 +67,7 @@ if use_gi:
 
         notify.init(app_name + ' Notify')
         new_notification = notify.Notification.new
-    except:
+    except Exception:
         xlog.warn("import Notify fail, please install libnotify if possible.")
         notify = None
 
@@ -79,7 +79,7 @@ if use_gi:
         new_appindicator = appindicator.Indicator.new
         appind_category = appindicator.IndicatorCategory.APPLICATION_STATUS
         appind_status = appindicator.IndicatorStatus.ACTIVE
-    except:
+    except Exception:
         appindicator = None
         popup_trayicon_menu = lambda m, s, b, t: m.popup(None, None, gtk.StatusIcon.position_menu, s, b, t)
 else:
@@ -88,7 +88,7 @@ else:
 
         notify.init(app_name + ' Notify')
         new_notification = notify.Notification
-    except:
+    except Exception:
         xlog.warn("import pynotify fail, please install python-notify if possible.")
         notify = None
 
@@ -99,7 +99,7 @@ else:
         new_appindicator = appindicator.Indicator
         appind_category = appindicator.CATEGORY_APPLICATION_STATUS
         appind_status = appindicator.STATUS_ACTIVE
-    except:
+    except Exception:
         appindicator = None
         popup_trayicon_menu = lambda m, s, b, t: m.popup(None, None, gtk.status_icon_position_menu, b, t, s)
 
@@ -125,7 +125,7 @@ class Gtk_tray():
         trayicon.set_menu(self.make_menu())
         try:  # this method does not exist when using pygtk and python2-appindicator
             trayicon.set_title(app_name)
-        except:
+        except Exception:
             pass
 
         return trayicon

@@ -203,7 +203,7 @@ class WaitQueue():
         try:
             end_time, lock = self.waiters.pop(0)
             lock.release()
-        except:
+        except Exception:
             pass
 
     def wait(self, wait_order):
@@ -689,7 +689,7 @@ class Conn(object):
         if self.sock is not None:
             try:
                 self.sock.close()
-            except:
+            except Exception:
                 pass
             self.sock = None
 

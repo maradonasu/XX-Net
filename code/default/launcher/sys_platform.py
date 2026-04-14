@@ -34,7 +34,7 @@ if sys.platform.startswith("linux"):
                 p = Popen(["xset", "-q"], stdout=PIPE, stderr=PIPE)
                 p.communicate()
                 return p.returncode == 0
-            except:
+            except Exception:
                 return False
 
 
@@ -55,7 +55,7 @@ if sys.platform.startswith("linux"):
                 pygtk.require('2.0')
                 import gtk
                 return True
-            except:
+            except Exception:
                 return False
 
 
@@ -74,7 +74,7 @@ if sys.platform.startswith("linux"):
             if has_desktop:
                 try:
                     from gtk_tray import sys_tray
-                except:
+                except ImportError:
                     from non_tray import sys_tray
             else:
                 from non_tray import sys_tray

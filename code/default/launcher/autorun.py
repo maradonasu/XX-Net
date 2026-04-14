@@ -36,7 +36,7 @@ if sys.platform == 'win32':
         exists = True
         try:
             winreg.QueryValueEx(key, name)
-        except:  # WindowsError
+        except OSError:
             exists = False
         winreg.CloseKey(key)
         return exists

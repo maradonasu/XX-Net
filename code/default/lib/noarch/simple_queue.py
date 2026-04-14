@@ -89,7 +89,7 @@ class Queue(object):
         try:
             if time.time() > self.waiters[0][0]:
                 self.notify()
-        except:
+        except Exception:
             pass
 
         return 1
@@ -129,7 +129,7 @@ class Queue(object):
         try:
             end_time, lock = self.waiters.pop(0)
             lock.release()
-        except:
+        except Exception:
             pass
 
     def wait(self, end_time):

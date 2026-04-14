@@ -240,7 +240,7 @@ class HttpsDispatcher(object):
             if worker in self.workers:
                 try:
                     self.workers.remove(worker)
-                except:
+                except Exception:
                     pass
 
     def get_worker(self, nowait=False):
@@ -362,7 +362,7 @@ class HttpsDispatcher(object):
 
             try:
                 response = q.get(timeout=timeout)
-            except:
+            except Exception:
                 response = None
 
             if response and response.status == 200:
@@ -438,7 +438,7 @@ class HttpsDispatcher(object):
             start_time = time.time()
             try:
                 task = self.request_queue.get()
-            except:
+            except Exception:
                 task = None
 
             if task is None:
@@ -526,7 +526,7 @@ class HttpsDispatcher(object):
                 self.h2_num -= 1
             else:
                 self.h1_num -= 1
-        except:
+        except Exception:
             pass
 
     def close_all_worker(self, reason="close all worker"):

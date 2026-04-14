@@ -13,7 +13,7 @@ def unpack(format, data):
 
     try:
         return origin_unpack(format, data)
-    except:
+    except Exception:
         need_convert = True
 
         data = data.tobytes()

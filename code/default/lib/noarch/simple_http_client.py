@@ -129,12 +129,12 @@ class Response(BaseResponse):
     def __del__(self):
         try:
             self.select2.unregister(self.sock)
-        except:
+        except Exception:
             pass
 
         try:
             socket.socket.close(self.sock)
-        except:
+        except Exception:
             pass
 
     def recv(self, to_read=8192, timeout=30.0):

@@ -65,7 +65,7 @@ class CheckAllIp(object):
                 try:
                     ip = line.split()[0]
                     return ip
-                except:
+                except Exception:
                     continue
 
     def write_ip(self, ip, host, handshake):

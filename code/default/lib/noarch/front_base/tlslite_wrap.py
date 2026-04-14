@@ -79,7 +79,7 @@ class SSLConnection(object):
 
         try:
             altName = cert.subject_alt_name_value.native
-        except:
+        except Exception:
             altName = []
 
         self.peer_cert = {

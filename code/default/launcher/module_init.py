@@ -147,5 +147,5 @@ def stop_all():
 
     try:
         os.remove(running_file)
-    except:
+    except (IOError, OSError):
         pass

@@ -116,7 +116,7 @@ def start(args):
             g.socks5_server = simple_http_server.HTTPServer(addresses, Socks5Server, logger=xlog)
             g.socks5_server.init_socket()
             g.bind_port = port
-        except:
+        except Exception:
             continue
         xlog.info("Socks5 server listen:%s:%d.", g.config.socks_host, port)
         break

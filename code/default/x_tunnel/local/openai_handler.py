@@ -68,7 +68,7 @@ def handle_openai(method, path, headers, req_body, sock):
     del headers["Host"]
     try:
         del headers["Accept-Encoding"]
-    except:
+    except Exception:
         pass
     content, status, response = front_dispatcher.request(method, host, path=path, headers=headers, data=req_body)
 

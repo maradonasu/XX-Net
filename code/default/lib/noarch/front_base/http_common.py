@@ -63,7 +63,7 @@ class Task(object):
             while self.read_buffer_len < size:
                 try:
                     data = self.body_queue.get(timeout=self.timeout)
-                except:
+                except Exception:
                     data = None
 
                 if not data:
@@ -105,7 +105,7 @@ class Task(object):
             else:
                 try:
                     data = self.body_queue.get(timeout=self.timeout)
-                except:
+                except Exception:
                     data = None
 
                 if not data:

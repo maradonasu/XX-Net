@@ -166,7 +166,7 @@ def encrypt_all(password, method, op, data):
 
 try:
     from Crypto.Cipher.ARC4 import new as RC4Cipher
-except:
+except ImportError:
     xlog.warn('Load Crypto.Cipher.ARC4 Failed, Use Pure Python Instead.')
     class RC4Cipher(object):
         def __init__(self, key):

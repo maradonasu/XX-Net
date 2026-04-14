@@ -22,7 +22,7 @@ except Exception as e:
     try:
         from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
         logger.debug("load cryptography success")
-    except:
+    except ImportError:
         logger.warn("load cryptography failed:%r", e)
         algorithms = None
 

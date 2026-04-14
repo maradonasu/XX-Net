@@ -163,7 +163,7 @@ class MacTrayObject(AppKit.NSObject):
     def enableGlobalXTunnel_(self, _):
         try:
             helperEnableXTunnelProxy(currentService)
-        except:
+        except (subprocess.SubprocessError, OSError):
             enableXTunnelProxyCommand = getEnableXTunnelProxyCommand(currentService)
             executeCommand = 'do shell script "%s" with administrator privileges' % enableXTunnelProxyCommand
 
@@ -176,7 +176,7 @@ class MacTrayObject(AppKit.NSObject):
     def disableProxy_(self, is_quit=False):
         try:
             helperDisableGlobalProxy(currentService)
-        except:
+        except (subprocess.SubprocessError, OSError):
             disableGlobalProxyCommand = getDisableGlobalProxyCommand(currentService)
             executeCommand = 'do shell script "%s" with administrator privileges' % disableGlobalProxyCommand
 
@@ -194,7 +194,7 @@ def setupHelper():
     try:
         with open(os.devnull) as devnull:
             subprocess.check_call(helper_path, stderr=devnull)
-    except:
+    except (subprocess.SubprocessError, OSError):
         if os.path.exists(helper_path):
             os.remove(helper_path)
         shutil.copyfile(os.path.join(current_path, 'mac_helper'), helper_path)

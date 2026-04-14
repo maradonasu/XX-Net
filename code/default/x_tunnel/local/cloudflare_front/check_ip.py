@@ -87,7 +87,7 @@ class CheckAllIp(object):
                     ip = ip_infos[0]
                     handshake_time = ip_infos[3]
                     return ip, handshake_time
-                except:
+                except Exception:
                     continue
 
     def write_ip(self, ip, host, handshake):

@@ -80,7 +80,7 @@ def download_file(url, file):
                 if not chunk: break
                 fp.write(chunk)
         return True
-    except:
+    except Exception:
         xlog.info("download %s to %s fail", url, file)
         return False
 
@@ -96,9 +96,9 @@ def sha1_file(filename):
             while len(buf) > 0:
                 hasher.update(buf)
                 buf = afile.read(BLOCKSIZE)
-        return hasher.hexdigest()
-    except:
-        return False
+            return hasher.hexdigest()
+        except (IOError, OSError):
+            return False
 
 
 def install_module(module, new_version):

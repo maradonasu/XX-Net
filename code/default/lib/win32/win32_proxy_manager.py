@@ -52,7 +52,7 @@ def disable_proxy():
     for i in range(0, values_num):
         try:
             key, value,_ = winreg.EnumValue(CONNECTIONS, i)
-        except:
+        except OSError:
             break
 
         List = INTERNET_PER_CONN_OPTION_LIST()
@@ -127,7 +127,7 @@ def set_proxy(proxy_addr):
         for i in range(0, values_num):
             try:
                 key,value,_ = winreg.EnumValue(CONNECTIONS, i)
-            except:
+            except OSError:
                 break
 
             if '://' in proxy_addr:

@@ -471,7 +471,7 @@ class IpManager(IpManagerBase):
                 return handshake_time
 
             return 9999
-        except:
+        except Exception:
             return 9999
 
     def append_ip_history(self, ip_str, info):
@@ -786,7 +786,7 @@ class IpManager(IpManagerBase):
                     if self.ip_dict[ip_str]['fail_times']:
                         self.ip_dict[ip_str]['fail_times'] = 0
                         self._add_ip_num(ip_str, 1)
-                except:
+                except Exception:
                     pass
                 continue
 
@@ -994,7 +994,7 @@ class IpManager(IpManagerBase):
         while self.running and self.keep_scan_all_exist_ip:
             try:
                 ip_str = self.scan_exist_ip_queue.get_nowait()
-            except:
+            except Exception:
                 break
 
             result = self.check_ip(ip_str)

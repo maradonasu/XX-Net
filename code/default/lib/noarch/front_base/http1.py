@@ -94,7 +94,7 @@ class Http1Worker(HttpWorker):
         while self.keep_running:
             try:
                 task = self.task_queue.get(block=True)
-            except:
+            except Exception:
                 task = None
 
             if not task:
@@ -200,7 +200,7 @@ class Http1Worker(HttpWorker):
 
         try:
             read_target = int(response.content_length)
-        except:
+        except Exception:
             read_target = 0
 
         data_len = 0

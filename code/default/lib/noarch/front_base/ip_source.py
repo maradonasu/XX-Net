@@ -62,7 +62,7 @@ class Ipv4RangeSource(object):
     def remove_user_range(self):
         try:
             os.remove(self.user_range_fn)
-        except:
+        except OSError:
             pass
 
     def load_ip_range(self):

@@ -73,7 +73,7 @@ class HttpServerHandler():
     def __del__(self):
         try:
             socket.socket.close(self.connection)
-        except:
+        except Exception:
             pass
 
     def handle(self):
@@ -110,7 +110,7 @@ class HttpServerHandler():
     def parse_request(self):
         try:
             self.raw_requestline = self.rfile.readline(65537)
-        except:
+        except Exception:
             raise GetReqTimeout()
 
         if not self.raw_requestline:
@@ -438,7 +438,7 @@ class HttpServerHandler():
                     if not data:
                         break
                     self.wfile.write(data)
-        except:
+        except Exception:
             pass
             # self.logger.warn("download broken")
 

@@ -27,7 +27,7 @@ from xlog import getLogger
 xlog = getLogger("launcher")
 try:
     from config import config
-except:
+except ImportError:
     from .config import config
 
 if not os.path.isdir(data_root):
@@ -174,10 +174,10 @@ def current_version():
             content = fd.read()
             p = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
             m = p.match(content)
-            if m:
-                version = m.group(1) + "." + m.group(2) + "." + m.group(3)
-                return version
-    except:
+                if m:
+                    version = m.group(1) + "." + m.group(2) + "." + m.group(3)
+                    return version
+    except (IOError, OSError):
         xlog.warn("get_version_fail in update_from_github")
 
     return "get_version_fail"
@@ -213,7 +213,7 @@ def hash_file_sum(filename):
                 hasher.update(buf)
                 buf = afile.read(BLOCKSIZE)
         return hasher.hexdigest()
-    except:
+    except (IOError, OSError):
         return False
 
 
@@ -317,7 +317,7 @@ def get_local_versions():
                 if m:
                     version = m.group(1) + "." + m.group(2) + "." + m.group(3)
                     return version
-        except:
+        except (IOError, OSError):
             return False
 
     files_in_code_path = os.listdir(code_path)
@@ -429,7 +429,7 @@ def cleanup():
                         os.remove(pt)
                     elif os.path.isdir(pt):
                         shutil.rmtree(pt)
-                except:
+                except (IOError, OSError):
                     pass
 
     keep_old_num = config.keep_old_ver_num  # default keep several old versions

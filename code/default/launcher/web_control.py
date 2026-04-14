@@ -292,7 +292,7 @@ class Http_Handler(simple_http_server.HttpServerHandler):
                 try:
                     self.send_response('text/html', content)
                     self.wfile.flush()
-                except:
+                except (socket.error, OSError):
                     pass
 
                 xlog.info("start quit")
@@ -327,7 +327,7 @@ class Http_Handler(simple_http_server.HttpServerHandler):
         try:
             target_module = reqs['module'][0]
             target_menu = reqs['menu'][0]
-        except:
+        except Exception:
             if config.enable_x_tunnel:
                 target_module = 'x_tunnel'
                 target_menu = 'config'
@@ -468,7 +468,7 @@ class Http_Handler(simple_http_server.HttpServerHandler):
 
                     try:
                         del module_init.xargs["allow_remote"]
-                    except:
+                    except Exception:
                         pass
 
                     if allow_remote_switch:

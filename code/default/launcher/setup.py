@@ -44,7 +44,7 @@ def get_XXNet():
                         break
                     fp.write(chunk)
             return True
-        except:
+        except Exception:
             xlog.info("download %s to %s fail", url, file)
             return False
 
@@ -94,7 +94,7 @@ def install_xxnet_files():
                     hasher.update(buf)
                     buf = afile.read(BLOCKSIZE)
             return hasher.hexdigest()
-        except:
+        except (IOError, OSError):
             return False
         pass
 
