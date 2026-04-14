@@ -562,7 +562,7 @@ class ConnectionPipe(object):
                         timeout = 0.001
                 except Exception as e:
                     self.xlog.exception("Conn session:%s select except:%r", self.session.session_id, e)
-                    if "Invalid argument" in str(e):
+                    if "Invalid argument" in str(e) or "10038" in str(e) or "非套接字" in str(e):
                         self.reset_all_connections()
                     time.sleep(1)
                     continue
