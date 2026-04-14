@@ -47,20 +47,54 @@ class _SelectorWrapper(selectors.DefaultSelector):
             self.unregister(fileobj)
             return self.register(fileobj, events, data)
 
-    def _fd_ok(self, fileobj: Any) -> bool:
-        try:
-            return fileobj.fileno() >= 0
-        except Exception:
-            return False
-
     def select(self, timeout: Optional[float] = None) -> list:
         self._unregister_closed()
-        return super().select(timeout)
+        try:
+            return super().select(timeout)
+        except (OSError, ValueError):
+            self._find_and_remove_bad_fd()
+            return []
 
     def _unregister_closed(self) -> None:
         closed = [key.fileobj for key in list(self._fd_to_key.values())
                   if not self._fd_ok(key.fileobj)]
         for fileobj in closed:
+            try:
+                self.unregister(fileobj)
+            except KeyError:
+                pass
+
+    @staticmethod
+    def _fd_ok(fileobj: Any) -> bool:
+        try:
+            return fileobj.fileno() >= 0
+        except Exception:
+            return False
+
+    def _find_and_remove_bad_fd(self) -> None:
+        if not self._fd_to_key:
+            return
+        bad = []
+        for fd, key in list(self._fd_to_key.items()):
+            try:
+                fno = key.fileobj.fileno()
+                if fno < 0:
+                    bad.append(key.fileobj)
+                    continue
+                self.unregister(key.fileobj)
+                try:
+                    super().select(0)
+                except (OSError, ValueError):
+                    bad.append(key.fileobj)
+                finally:
+                    if key.fileobj not in bad:
+                        try:
+                            self.register(key.fileobj, key.events, key.data)
+                        except Exception:
+                            bad.append(key.fileobj)
+            except KeyError:
+                pass
+        for fileobj in bad:
             try:
                 self.unregister(fileobj)
             except KeyError:
