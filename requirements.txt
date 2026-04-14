@@ -8,3 +8,4 @@ ecdsa>=0.18.0
 PySocks>=1.7.0
 sortedcontainers>=2.4.0
 brotli>=1.0.0
+httpx>=0.28.0
