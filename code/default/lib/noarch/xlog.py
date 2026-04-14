@@ -1,6 +1,8 @@
 import os
 import sys
 import time
+import logging
+import logging.handlers
 from datetime import datetime
 import traceback
 import threading
@@ -12,71 +14,204 @@ string_types = str
 
 import utils
 
-CRITICAL = 50
-FATAL = CRITICAL
-ERROR = 40
-WARNING = 30
-WARN = WARNING
-INFO = 20
-DEBUG = 10
-NOTSET = 0
+CRITICAL = logging.CRITICAL
+FATAL = logging.CRITICAL
+ERROR = logging.ERROR
+WARNING = logging.WARNING
+WARN = logging.WARNING
+INFO = logging.INFO
+DEBUG = logging.DEBUG
+NOTSET = logging.NOTSET
 
-# full_log set by server, upload full log for debug (maybe next time start session), remove old log file on reset log
 full_log = False
 
-# keep log set by UI, keep all logs, never delete old log, also upload log to server.
+
+class _WebBufferHandler(logging.Handler):
+    def __init__(self, logger_instance, buffer_size=0):
+        super().__init__()
+        self._logger_instance = logger_instance
+        self._buffer_size = buffer_size
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            inst = self._logger_instance
+            with inst.buffer_lock:
+                if inst.buffer_size:
+                    inst.last_no += 1
+                    inst.buffer[inst.last_no] = msg + '\n'
+                    buf_len = len(inst.buffer)
+                    if buf_len > inst.buffer_size:
+                        del inst.buffer[inst.last_no - inst.buffer_size]
+        except Exception:
+            pass
+
+
+class _StartLogHandler(logging.Handler):
+    def __init__(self, logger_instance, filepath, max_entries=0):
+        super().__init__()
+        self._logger_instance = logger_instance
+        self._filepath = filepath
+        self._fd = open(filepath, "w")
+        self._count = 0
+        self._max_entries = max_entries
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self._fd.write(msg + '\n')
+            self._fd.flush()
+            self._count += 1
+            inst = self._logger_instance
+            if self._max_entries and self._count >= self._max_entries and not inst.keep_log and not full_log:
+                self._fd.close()
+                self._fd = None
+        except Exception:
+            pass
+
+
+class _WarningLogHandler(logging.Handler):
+    def __init__(self, filepath):
+        super().__init__()
+        self._filepath = filepath
+        self._fd = open(filepath, "a")
+
+    def emit(self, record):
+        if record.levelno < logging.WARNING:
+            return
+        try:
+            msg = self.format(record)
+            self._fd.write(msg + '\n')
+            self._fd.flush()
+        except Exception:
+            pass
+
+
+class _ColorFormatter(logging.Formatter):
+    def __init__(self, logger_instance):
+        super().__init__()
+        self._inst = logger_instance
+
+    def format(self, record):
+        dt = datetime.fromtimestamp(record.created)
+        time_str = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:23]
+        level_name = record.levelname
+        return '%s [%s][%s] %s' % (time_str, record.name, level_name, record.getMessage())
+
+
+class _FileFormatter(logging.Formatter):
+    def __init__(self):
+        super().__init__()
+
+    def format(self, record):
+        dt = datetime.fromtimestamp(record.created)
+        time_str = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:23]
+        level_name = record.levelname
+        return '%s - [%s] %s' % (time_str, level_name, record.getMessage())
 
 
 class Logger():
     def __init__(self, name, buffer_size=0, file_name=None, roll_num=1,
                  log_path=None, save_start_log=0, save_warning_log=False):
         self.name = str(name)
-        self.file_max_size = 1024 * 1024
         self.buffer_lock = threading.RLock()
-        self.buffer = {}  # id => line
+        self.buffer = {}
         self.buffer_size = buffer_size
         self.last_no = 0
         self.min_level = NOTSET
-        self.log_fd = None
-        self.set_color()
         self.roll_num = roll_num
-        if file_name:
-            self.set_file(file_name)
+        self.file_max_size = 1024 * 1024
+        self._file_size = 0
+        self._log_filename = None
+        self._log_fd = None
+
+        self._py_logger = logging.getLogger('xlog.' + self.name)
+        self._py_logger.propagate = False
+        self._py_logger.setLevel(logging.DEBUG)
+
+        self.set_color()
 
         self.log_path = log_path
         self.save_start_log = save_start_log
         self.save_warning_log = save_warning_log
+        self.start_log = None
+        self._start_log_handler = None
+        self._warning_log_handler = None
+        self.warning_log_fn = None
+        self.warning_log = None
         self.start_log_num = 0
+        self.keep_log = False
+
+        self._console_handler = None
+        self._file_handler = None
+        self._buffer_handler = None
+        self._color_fmt = _ColorFormatter(self)
+        self._file_fmt = _FileFormatter()
+
+        self._setup_console_handler()
+
+        if file_name:
+            self.set_file(file_name)
+
         if log_path and save_start_log:
             now = datetime.now()
             time_str = now.strftime("%Y-%m-%d_%H-%M-%S")
             self.log_fn = os.path.join(log_path, "start_log_%s_%s.log" % (name, time_str))
             self.start_log = open(self.log_fn, "w")
+            handler = _StartLogHandler(self, self.log_fn, save_start_log)
+            handler.setFormatter(self._file_fmt)
+            self._py_logger.addHandler(handler)
+            self._start_log_handler = handler
         else:
-            self.start_log = None
+            self.log_fn = None
 
         if log_path and os.path.exists(join(log_path, "keep_log.txt")):
             self.info("keep log")
             self.keep_log = True
-        else:
-            self.keep_log = False
 
         if log_path and save_warning_log:
             self.warning_log_fn = os.path.join(log_path, "%s_warning.log" % (name))
             self.warning_log = open(self.warning_log_fn, "a")
-        else:
-            self.warning_log_fn = None
-            self.warning_log = None
+            handler = _WarningLogHandler(self.warning_log_fn)
+            handler.setFormatter(self._file_fmt)
+            self._py_logger.addHandler(handler)
+            self._warning_log_handler = handler
+
+        if buffer_size:
+            self._buffer_handler = _WebBufferHandler(self, buffer_size)
+            self._buffer_handler.setFormatter(self._file_fmt)
+            self._py_logger.addHandler(self._buffer_handler)
+
+    def _setup_console_handler(self):
+        self._console_handler = logging.StreamHandler(sys.stderr)
+        self._console_handler.setFormatter(self._color_fmt)
+        self._console_handler.addFilter(lambda record: self._console_emit(record) or True)
+        self._py_logger.addHandler(self._console_handler)
+
+    def _console_emit(self, record):
+        color = None
+        if record.levelno >= logging.ERROR:
+            color = self.err_color
+        elif record.levelno >= logging.WARNING:
+            color = self.warn_color
+        elif record.levelno >= logging.DEBUG:
+            color = self.debug_color
+
+        try:
+            self.set_console_color(color)
+        except Exception:
+            pass
+        return False
 
     def set_buffer(self, buffer_size):
         with self.buffer_lock:
             self.buffer_size = buffer_size
-            buffer_len = len(self.buffer)
-            if buffer_len > self.buffer_size:
-                for i in range(self.last_no - buffer_len, self.last_no - self.buffer_size):
+            buf_len = len(self.buffer)
+            if buf_len > self.buffer_size:
+                for i in range(self.last_no - buf_len, self.last_no - self.buffer_size):
                     try:
                         del self.buffer[i]
-                    except:
+                    except Exception:
                         pass
 
     def reset_log_files(self):
@@ -85,27 +220,37 @@ class Logger():
                 self.start_log.close()
                 self.start_log = None
 
+            if self._start_log_handler:
+                self._py_logger.removeHandler(self._start_log_handler)
+                self._start_log_handler = None
+
             if self.warning_log:
                 self.warning_log.close()
                 self.warning_log = None
+
+            if self._warning_log_handler:
+                self._py_logger.removeHandler(self._warning_log_handler)
+                self._warning_log_handler = None
 
         if self.log_path and not self.keep_log:
             for filename in os.listdir(self.log_path):
                 fp = os.path.join(self.log_path, filename)
                 if not filename.endswith(".log") or fp == self.log_fn or not filename.startswith("start_log_%s" % self.name):
                     continue
-
                 try:
                     os.remove(fp)
-                except:
+                except Exception:
                     pass
 
         if self.warning_log_fn and not self.keep_log:
             self.warning_log = open(self.warning_log_fn, "a")
+            handler = _WarningLogHandler(self.warning_log_fn)
+            handler.setFormatter(self._file_fmt)
+            self._py_logger.addHandler(handler)
+            self._warning_log_handler = handler
 
     def keep_logs(self):
         self.keep_log = True
-        # self.debug("keep log for %s", self.name)
         if not self.log_path:
             return
 
@@ -119,16 +264,18 @@ class Logger():
             self.start_log = open(log_fn, "w")
 
     def setLevel(self, level):
-        if level == "DEBUG":
-            self.min_level = DEBUG
-        elif level == "INFO":
-            self.min_level = INFO
-        elif level == "WARN":
-            self.min_level = WARN
-        elif level == "ERROR":
-            self.min_level = ERROR
-        elif level == "FATAL":
-            self.min_level = FATAL
+        level_map = {
+            "DEBUG": logging.DEBUG,
+            "INFO": logging.INFO,
+            "WARN": logging.WARNING,
+            "WARNING": logging.WARNING,
+            "ERROR": logging.ERROR,
+            "FATAL": logging.CRITICAL,
+        }
+        py_level = level_map.get(level)
+        if py_level is not None:
+            self.min_level = py_level
+            self._py_logger.setLevel(py_level)
         else:
             print(("log level not support:%s", level))
 
@@ -159,65 +306,92 @@ class Logger():
                 self.set_console_color = lambda color: sys.stderr.write(color)
 
     def set_file(self, file_name):
-        self.log_filename = file_name
+        self._log_filename = file_name
         if os.path.isfile(file_name):
-            self.file_size = os.path.getsize(file_name)
-            if self.file_size > self.file_max_size:
-                self.roll_log()
-                self.file_size = 0
+            self._file_size = os.path.getsize(file_name)
+            if self._file_size > self.file_max_size:
+                self._roll_log()
+                self._file_size = 0
         else:
-            self.file_size = 0
+            self._file_size = 0
 
-        self.log_fd = open(file_name, "a+")
+        self._log_fd = open(file_name, "a+")
 
-    def roll_log(self):
+        if self._file_handler:
+            self._py_logger.removeHandler(self._file_handler)
+
+        self._file_handler = logging.StreamHandler(self._log_fd)
+        self._file_handler.setFormatter(self._file_fmt)
+        self._py_logger.addHandler(self._file_handler)
+
+    def _roll_log(self):
         for i in range(self.roll_num, 1, -1):
-            new_name = "%s.%d" % (self.log_filename, i)
-            old_name = "%s.%d" % (self.log_filename, i - 1)
+            new_name = "%s.%d" % (self._log_filename, i)
+            old_name = "%s.%d" % (self._log_filename, i - 1)
             if not os.path.isfile(old_name):
                 continue
-
-            # self.info("roll_log %s -> %s", old_name, new_name)
             shutil.move(old_name, new_name)
 
-        shutil.move(self.log_filename, self.log_filename + ".1")
+        shutil.move(self._log_filename, self._log_filename + ".1")
 
-    def log(self, level, console_color, html_color, fmt, *args, **kwargs):
+    def _log(self, level, fmt, *args, **kwargs):
+        if self.min_level and level < self.min_level:
+            return
+
         args = utils.bytes2str_only(args)
-        now = datetime.now()
-        time_str = now.strftime("%Y-%m-%d %H:%M:%S.%f")[:23]
-        string = '%s - [%s] %s\n' % (time_str, level, fmt % args)
+        msg = fmt % args if args else fmt
+
+        dt = datetime.now()
+        time_str = dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:23]
+        level_names = {
+            logging.DEBUG: 'DEBUG',
+            logging.INFO: 'INFO',
+            logging.WARNING: 'WARNING',
+            logging.ERROR: 'ERROR',
+            logging.CRITICAL: 'CRITICAL',
+        }
+        level_name = level_names.get(level, 'UNKNOWN')
+        string = '%s - [%s] %s\n' % (time_str, level_name, msg)
+
         self.buffer_lock.acquire()
         try:
             try:
-                console_string = '%s [%s][%s] %s\n' % (time_str, self.name, level, fmt % args)
+                console_string = '%s [%s][%s] %s\n' % (time_str, self.name, level_name, msg)
+
+                console_color = None
+                if level >= logging.ERROR:
+                    console_color = self.err_color
+                elif level >= logging.WARNING:
+                    console_color = self.warn_color
+                elif level >= logging.DEBUG:
+                    console_color = self.debug_color
 
                 self.set_console_color(console_color)
                 sys.stderr.write(console_string)
                 self.set_console_color(self.reset_color)
-            except:
+            except Exception:
                 pass
 
-            if self.log_fd:
-                self.log_fd.write(string)
+            if self._log_fd:
+                self._log_fd.write(string)
                 try:
-                    self.log_fd.flush()
-                except:
+                    self._log_fd.flush()
+                except Exception:
                     pass
 
-                self.file_size += len(string)
-                if self.file_size > self.file_max_size:
-                    self.log_fd.close()
-                    self.log_fd = None
-                    self.roll_log()
-                    self.log_fd = open(self.log_filename, "w")
-                    self.file_size = 0
+                self._file_size += len(string)
+                if self._file_size > self.file_max_size:
+                    self._log_fd.close()
+                    self._log_fd = None
+                    self._roll_log()
+                    self._log_fd = open(self._log_filename, "w")
+                    self._file_size = 0
 
             if self.start_log:
                 self.start_log.write(string)
                 try:
                     self.start_log.flush()
-                except:
+                except Exception:
                     pass
                 self.start_log_num += 1
 
@@ -225,26 +399,26 @@ class Logger():
                     self.start_log.close()
                     self.start_log = None
 
-            if self.warning_log and level in ["WARN", "WARNING", "ERROR", "CRITICAL"]:
+            if self.warning_log and level >= logging.WARNING:
                 self.warning_log.write(string)
                 try:
                     self.warning_log.flush()
-                except:
+                except Exception:
                     pass
 
             if self.buffer_size:
                 self.last_no += 1
                 self.buffer[self.last_no] = string
-                buffer_len = len(self.buffer)
-                if buffer_len > self.buffer_size:
+                buf_len = len(self.buffer)
+                if buf_len > self.buffer_size:
                     del self.buffer[self.last_no - self.buffer_size]
         except Exception as e:
-            string = '%s - [%s]LOG_EXCEPT: %s, Except:%s<br> %s' % \
-                     (time.ctime()[4:-5], level, fmt % args, e, traceback.format_exc())
+            error_str = '%s - [%s]LOG_EXCEPT: %s, Except:%s<br> %s' % \
+                        (time.ctime()[4:-5], level_name, msg, e, traceback.format_exc())
             self.last_no += 1
-            self.buffer[self.last_no] = string
-            buffer_len = len(self.buffer)
-            if buffer_len > self.buffer_size:
+            self.buffer[self.last_no] = error_str
+            buf_len = len(self.buffer)
+            if buf_len > self.buffer_size:
                 del self.buffer[self.last_no - self.buffer_size]
         finally:
             self.buffer_lock.release()
@@ -252,17 +426,17 @@ class Logger():
     def debug(self, fmt, *args, **kwargs):
         if self.min_level > DEBUG:
             return
-        self.log('DEBUG', self.debug_color, '21610b', fmt, *args, **kwargs)
+        self._log(logging.DEBUG, fmt, *args, **kwargs)
 
     def info(self, fmt, *args, **kwargs):
         if self.min_level > INFO:
             return
-        self.log('INFO', self.reset_color, '000000', fmt, *args)
+        self._log(logging.INFO, fmt, *args)
 
     def warning(self, fmt, *args, **kwargs):
         if self.min_level > WARN:
             return
-        self.log('WARNING', self.warn_color, 'FF8000', fmt, *args, **kwargs)
+        self._log(logging.WARNING, fmt, *args, **kwargs)
 
     def warn(self, fmt, *args, **kwargs):
         self.warning(fmt, *args, **kwargs)
@@ -270,7 +444,7 @@ class Logger():
     def error(self, fmt, *args, **kwargs):
         if self.min_level > ERROR:
             return
-        self.log('ERROR', self.err_color, 'FE2E2E', fmt, *args, **kwargs)
+        self._log(logging.ERROR, fmt, *args, **kwargs)
 
     def exception(self, fmt, *args, **kwargs):
         self.error(fmt, *args, **kwargs)
@@ -279,19 +453,18 @@ class Logger():
     def critical(self, fmt, *args, **kwargs):
         if self.min_level > CRITICAL:
             return
-        self.log('CRITICAL', self.err_color, 'D7DF01', fmt, *args, **kwargs)
+        self._log(logging.CRITICAL, fmt, *args, **kwargs)
 
-    # =================================================================
     def get_last_lines(self, max_lines):
         self.buffer_lock.acquire()
-        buffer_len = len(self.buffer)
-        if buffer_len > max_lines:
+        buf_len = len(self.buffer)
+        if buf_len > max_lines:
             first_no = self.last_no - max_lines
         else:
-            first_no = self.last_no - buffer_len + 1
+            first_no = self.last_no - buf_len + 1
 
         jd = {}
-        if buffer_len > 0:
+        if buf_len > 0:
             for i in range(first_no, self.last_no + 1):
                 jd[i] = utils.to_str(self.buffer[i])
         self.buffer_lock.release()
@@ -382,7 +555,7 @@ def info(fmt, *args, **kwargs):
 
 
 def warning(fmt, *args, **kwargs):
-    default_log.warnin(fmt, *args, **kwargs)
+    default_log.warning(fmt, *args, **kwargs)
 
 
 def warn(fmt, *args, **kwargs):

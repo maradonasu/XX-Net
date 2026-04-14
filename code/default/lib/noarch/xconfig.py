@@ -2,7 +2,9 @@
 import time
 import json
 import os
-import xlog
+import logging
+
+_logger = logging.getLogger('xlog.xconfig')
 
 
 class Config(object):
@@ -19,7 +21,7 @@ class Config(object):
     def check_change(self):
         if os.path.getmtime(self.config_path) > self.last_load_time:
             self.load()
-            xlog.info("reload config %s", self.config_path)
+            _logger.info("reload config %s", self.config_path)
 
     def load(self):
         self.last_load_time = time.time()
@@ -33,7 +35,7 @@ class Config(object):
                 try:
                     self.file_config = json.loads(content)
                 except Exception as e:
-                    xlog.warn("Loading config:%s content:%s fail:%r", self.config_path, content, e)
+                    _logger.warn("Loading config:%s content:%s fail:%r", self.config_path, content, e)
                     self.file_config = {}
 
         for var_name in self.default_config:
@@ -42,7 +44,6 @@ class Config(object):
             else:
                 setattr(self, var_name, self.default_config[var_name])
 
-    # only save var not same with default
     def save(self):
         for var_name in self.default_config:
             if getattr(self, var_name, None) == self.default_config[var_name]:
