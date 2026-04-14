@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import sys
 import threading
@@ -6,6 +8,7 @@ import socket
 import xstruct as struct
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, Optional, Union
 
 import selectors
 
@@ -13,31 +16,31 @@ import utils
 
 
 class _SelectorWrapper(selectors.DefaultSelector):
-    def register_event(self, fileobj, event, data):
+    def register_event(self, fileobj: Any, event: int, data: Any) -> Optional[selectors.SelectorKey]:
         try:
             key = self._fd_to_key[self._fileobj_lookup(fileobj)]
         except KeyError:
             return self.register(fileobj, event, data)
 
         if key.events & event:
-            return
+            return None
         else:
             events = key.events | event
             self.unregister(fileobj)
-            self.register(fileobj, events, data)
+            return self.register(fileobj, events, data)
 
-    def unregister_event(self, fileobj, event):
+    def unregister_event(self, fileobj: Any, event: int) -> Optional[selectors.SelectorKey]:
         try:
             key = self._fd_to_key[self._fileobj_lookup(fileobj)]
         except KeyError:
-            return
+            return None
 
         if not key.events & event:
             return key
 
         if key.events == event:
             self.unregister(fileobj)
-            return
+            return None
         else:
             events = key.events & ~event
             data = key.data
@@ -51,27 +54,27 @@ _stop_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="conn_stop
 
 
 class WriteBuffer(object):
-    def __init__(self, s=None):
+    def __init__(self, s: Optional[bytes] = None) -> None:
         if isinstance(s, bytes):
-            self.string_len = len(s)
-            self.buffer_list = [s]
+            self.string_len: int = len(s)
+            self.buffer_list: list[bytes] = [s]
         elif s is None:
             self.reset()
         else:
             raise Exception("WriteBuffer init not bytes or StringBuffer")
 
-    def reset(self):
+    def reset(self) -> None:
         self.buffer_list = []
         self.string_len = 0
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.string_len
 
-    def __add__(self, other):
+    def __add__(self, other: Union[bytes, WriteBuffer]) -> WriteBuffer:
         self.append(other)
         return self
 
-    def insert(self, s):
+    def insert(self, s: Union[bytes, WriteBuffer]) -> None:
         if isinstance(s, WriteBuffer):
             self.buffer_list = s.buffer_list + self.buffer_list
             self.string_len += s.string_len
@@ -81,7 +84,7 @@ class WriteBuffer(object):
         else:
             raise Exception("WriteBuffer append not string or StringBuffer")
 
-    def append(self, s):
+    def append(self, s: Union[bytes, WriteBuffer]) -> None:
         if isinstance(s, WriteBuffer):
             self.buffer_list.extend(s.buffer_list)
             self.string_len += s.string_len
@@ -91,7 +94,7 @@ class WriteBuffer(object):
         else:
             raise Exception("WriteBuffer append not bytes or StringBuffer")
 
-    def to_bytes(self):
+    def to_bytes(self) -> bytes:
         return b"".join(self.buffer_list)
 
     def __bytes__(self):
@@ -102,7 +105,7 @@ class WriteBuffer(object):
 
 
 class ReadBuffer(object):
-    def __init__(self, buf, begin=0, size=None):
+    def __init__(self, buf: bytes, begin: int = 0, size: Optional[int] = None) -> None:
         buf_len = len(buf)
         if size is None:
             if begin > buf_len:
@@ -111,14 +114,14 @@ class ReadBuffer(object):
         elif begin + size > buf_len:
             raise Exception("ReadBuffer buf_len:%d, start:%d len:%d" % (buf_len, begin, size))
 
-        self.size = size
-        self.buf = memoryview(buf)
-        self.begin = begin
+        self.size: int = size
+        self.buf: memoryview = memoryview(buf)
+        self.begin: int = begin
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.size
 
-    def get(self, size=None):
+    def get(self, size: Optional[int] = None) -> memoryview:
         if size is None:
             size = self.size
         elif size > self.size:
@@ -149,23 +152,24 @@ class ReadBuffer(object):
 
 
 class AckPool():
-    def __init__(self):
-        self.mutex = threading.Lock()
+    def __init__(self) -> None:
+        self.mutex: threading.Lock = threading.Lock()
+        self.ack_buffer: WriteBuffer = WriteBuffer()
         self.reset()
 
-    def reset(self):
+    def reset(self) -> None:
         # xlog.info("Ack_pool reset")
         with self.mutex:
             self.ack_buffer = WriteBuffer()
 
         # xlog.info("Ack_pool reset finished")
 
-    def put(self, data):
+    def put(self, data: bytes) -> None:
         # xlog.debug("Ack_pool put len:%d", len(data))
         with self.mutex:
             self.ack_buffer.append(data)
 
-    def get(self):
+    def get(self) -> WriteBuffer:
         with self.mutex:
             data = self.ack_buffer
             self.ack_buffer = WriteBuffer()
@@ -173,20 +177,19 @@ class AckPool():
         # xlog.debug("Ack_pool get len:%d", len(data))
         return data
 
-    def status(self):
+    def status(self) -> str:
         out_string = "Ack_pool:len %d\r\n" % len(self.ack_buffer)
         return out_string
 
 
 class WaitQueue():
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.waiters = []
-        # (end_time, Lock())
+    def __init__(self) -> None:
+        self.lock: threading.Lock = threading.Lock()
+        self.waiters: list[tuple[int, threading.Lock]] = []
 
-        self.running = True
+        self.running: bool = True
 
-    def stop(self):
+    def stop(self) -> None:
         self.running = False
         xlog.info("WaitQueue stop")
         for end_time, lock in self.waiters:
@@ -414,14 +417,14 @@ class BlockReceivePool():
 
 
 class ConnectionPipe(object):
-    def __init__(self, session, xlog):
+    def __init__(self, session: Any, xlog: Any) -> None:
         self.session = session
         self.xlog = xlog
-        self.running = True
-        self.th = None
-        self.select2 = _SelectorWrapper()
-        self.sock_conn_map = {}
-        self._lock = threading.RLock()
+        self.running: bool = True
+        self.th: Optional[threading.Thread] = None
+        self.select2: _SelectorWrapper = _SelectorWrapper()
+        self.sock_conn_map: dict[Any, Any] = {}
+        self._lock: threading.RLock = threading.RLock()
 
         if sys.platform == "win32":
             self.slow_wait = 0.1

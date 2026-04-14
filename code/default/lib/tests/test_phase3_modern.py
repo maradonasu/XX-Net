@@ -50,3 +50,12 @@ class TestTypeAnnotations(TestCase):
         self.assertIn('def to_bytes(data: ', content)
         self.assertIn('def to_str(data: ', content)
         self.assertIn('def merge_two_dict(x: dict', content)
+
+    def test_base_container_has_type_annotations(self):
+        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'base_container.py')
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('from __future__ import annotations', content)
+        self.assertIn('from typing import', content)
+        self.assertIn('def __init__(self, s: Optional[bytes]', content)
+        self.assertIn('def __init__(self, session: Any, xlog: Any)', content)
