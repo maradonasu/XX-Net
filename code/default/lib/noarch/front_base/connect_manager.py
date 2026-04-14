@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+from __future__ import annotations
 
 """
 This file manage the ssl connection pool.
@@ -20,6 +21,7 @@ import threading
 import operator
 import socket
 import random
+from typing import Any, Callable, Optional, Tuple
 
 from .openssl_wrap import SSLConnection
 
@@ -28,15 +30,15 @@ class NoRescourceException(Exception):
 
 
 class ConnectPool():
-    def __init__(self):
-        self.pool_lock = threading.Lock()
-        self.not_empty = threading.Condition(self.pool_lock)
-        self.pool = {}
+    def __init__(self) -> None:
+        self.pool_lock: threading.Lock = threading.Lock()
+        self.not_empty: threading.Condition = threading.Condition(self.pool_lock)
+        self.pool: dict[Any, float] = {}
 
-    def qsize(self):
+    def qsize(self) -> int:
         return len(self.pool)
 
-    def put(self, item):
+    def put(self, item: Tuple[float, Any]) -> None:
         handshake_time, sock = item
         self.not_empty.acquire()
         try:
@@ -45,7 +47,7 @@ class ConnectPool():
         finally:
             self.not_empty.release()
 
-    def get(self, block=True, timeout=None):
+    def get(self, block: bool = True, timeout: Optional[float] = None) -> Optional[Tuple[float, Any]]:
         self.not_empty.acquire()
         try:
             if not block:
@@ -69,10 +71,10 @@ class ConnectPool():
         finally:
             self.not_empty.release()
 
-    def get_nowait(self):
+    def get_nowait(self) -> Optional[Tuple[float, Any]]:
         return self.get(block=False)
 
-    def _get(self):
+    def _get(self) -> Tuple[float, Any]:
         fastest_time = 9999
         fastest_sock = None
         for sock in self.pool:
@@ -162,7 +164,7 @@ class ConnectPool():
 
 
 class ConnectManager(object):
-    def __init__(self, logger, config, connect_creator, ip_manager, check_local_network):
+    def __init__(self, logger: Any, config: Any, connect_creator: Any, ip_manager: Any, check_local_network: Any) -> None:
         self.class_name = "ConnectManager"
         self.logger = logger
         self.config = config
