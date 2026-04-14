@@ -47,25 +47,24 @@ class _SelectorWrapper(selectors.DefaultSelector):
             self.unregister(fileobj)
             return self.register(fileobj, events, data)
 
-    def select(self, timeout: Optional[float] = None) -> list:
-        try:
-            return super().select(timeout)
-        except (OSError, ValueError):
-            bad_keys = [(fd, key) for fd, key in list(self._fd_to_key.items())
-                        if not self._fd_ok(key.fileobj)]
-            for fd, key in bad_keys:
-                try:
-                    self.unregister(key.fileobj)
-                except KeyError:
-                    pass
-            return []
-
-    @staticmethod
-    def _fd_ok(fileobj: Any) -> bool:
+    def _fd_ok(self, fileobj: Any) -> bool:
         try:
             return fileobj.fileno() >= 0
         except Exception:
             return False
+
+    def select(self, timeout: Optional[float] = None) -> list:
+        self._unregister_closed()
+        return super().select(timeout)
+
+    def _unregister_closed(self) -> None:
+        closed = [key.fileobj for key in list(self._fd_to_key.values())
+                  if not self._fd_ok(key.fileobj)]
+        for fileobj in closed:
+            try:
+                self.unregister(fileobj)
+            except KeyError:
+                pass
 
 from xlog import getLogger
 xlog = getLogger("x_tunnel")
