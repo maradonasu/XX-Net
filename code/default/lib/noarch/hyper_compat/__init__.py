@@ -341,7 +341,7 @@ class HTTP20Connection:
         
         self._settings = {
             SettingsFrame.INITIAL_WINDOW_SIZE: DEFAULT_WINDOW_SIZE,
-            SettingsFrame.SETTINGS_MAX_FRAME_SIZE: FRAME_MAX_LEN,
+            SettingsFrame.MAX_FRAME_SIZE: FRAME_MAX_LEN,
         }
         
         if ssl_sock:
