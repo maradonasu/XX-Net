@@ -81,19 +81,12 @@ class _SelectorWrapper(selectors.DefaultSelector):
                 if fno < 0:
                     bad.append(key.fileobj)
                     continue
-                self.unregister(key.fileobj)
                 try:
-                    super().select(0)
-                except (OSError, ValueError):
+                    key.fileobj.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                except OSError:
                     bad.append(key.fileobj)
-                finally:
-                    if key.fileobj not in bad:
-                        try:
-                            self.register(key.fileobj, key.events, key.data)
-                        except Exception:
-                            bad.append(key.fileobj)
-            except KeyError:
-                pass
+            except Exception:
+                bad.append(key.fileobj)
         for fileobj in bad:
             try:
                 self.unregister(fileobj)
@@ -637,7 +630,7 @@ class ConnectionPipe(object):
                         except BlockingIOError:
                             continue
                         except Exception as e:
-                            self._debug_log("conn:%d recv e:%r", conn.conn_id, e)
+                            self.xlog.info("conn:%d fd:%d recv e:%r type:%s", conn.conn_id, sock.fileno() if hasattr(sock, 'fileno') else -1, e, type(e).__name__)
                             self.close_sock(sock, "recv_error")
                             continue
 
@@ -786,9 +779,7 @@ class Conn(object):
 
             sock.connect((ip, port))
 
-            # record TCP connection time
-            # conn_time = time.time() - start_time
-            # self.xlog.debug("tcp conn %s %s time:%d", host, ip, conn_time * 1000)
+            sock.setblocking(False)
 
             return sock, True
         except Exception as e:
