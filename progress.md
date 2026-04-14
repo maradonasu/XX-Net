@@ -51,7 +51,12 @@
 | `4cb2a11e` | Fix selector race: use getsockopt, set non-blocking |
 | `789054b4` | Fix socket handoff: HTTPServer must not close handed-off sockets |
 
-**测试状态**：84 tests pass, 3 pre-existing DNS failures
+**测试状态**：87 tests pass, 3 pre-existing DNS failures
+
+**新增测试**：`test_xtunnel_socks5.py` - SOCKS5 代理集成测试
+- `test_socks5_port_open` - 验证 SOCKS5 端口监听
+- `test_socks5_proxy_github` - 验证代理能连接 github.com:443
+- `test_socks5_proxy_raw_http` - 验证原始 SOCKS5 协议握手
 
 **人工测试**：✅ `curl -x socks5://127.0.0.1:1080 https://github.com` 成功返回 HTTP/1.1 200
 
