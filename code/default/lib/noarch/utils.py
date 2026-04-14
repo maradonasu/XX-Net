@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from __future__ import annotations
+
 import re
 import os
 import threading
 from functools import reduce
+from typing import Any, Optional, Union
+
 string_types = str
 
 ipv4_pattern = re.compile(br'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$')
@@ -13,7 +17,7 @@ ipv6_pattern = re.compile(br"""
         ^
         \s*                         # Leading whitespace
         (?!.*::.*::)                # Only a single whildcard allowed
-        (?:(?!:)|:(?=:))            # Colon iff it would be part of a wildcard
+        (?:(?!:)|:(?=:))            # Colon iff it would be part of wildcard
         (?:                         # Repeat 6 times:
             [0-9a-f]{0,4}           #   A group of at most four hexadecimal digits
             (?:(?<=::)|(?<!::):)    #   Colon unless preceeded by wildcard
@@ -37,7 +41,7 @@ ipv6_pattern = re.compile(br"""
     """, re.VERBOSE | re.IGNORECASE | re.DOTALL)
 
 
-def check_ip_valid4(ip):
+def check_ip_valid4(ip: Union[str, bytes]) -> int:
     """检查ipv4地址的合法性"""
     ip = to_bytes(ip)
     ret = ipv4_pattern.match(ip)
@@ -51,14 +55,14 @@ def check_ip_valid4(ip):
         return 0
 
 
-def check_ip_valid6(ip):
+def check_ip_valid6(ip: Union[str, bytes]) -> bool:
     """Copied from http://stackoverflow.com/a/319293/2755602"""
     ip = to_bytes(ip)
 
     return ipv6_pattern.match(ip) is not None
 
 
-def check_ip_valid(ip):
+def check_ip_valid(ip: Union[str, bytes]) -> int:
     ip = to_bytes(ip)
     if b'.' in ip:
         return check_ip_valid4(ip)
@@ -66,7 +70,7 @@ def check_ip_valid(ip):
         return check_ip_valid6(ip)
 
 
-def get_ip_port(ip_str, port=443):
+def get_ip_port(ip_str: Union[str, bytes], port: int = 443) -> tuple[bytes, int]:
     ip_str = to_bytes(ip_str)
     if b"." in ip_str:
         # ipv4
@@ -96,7 +100,7 @@ def get_ip_port(ip_str, port=443):
     return ip, int(port)
 
 
-def get_ip_str(ip, port=443):
+def get_ip_str(ip: Union[str, bytes], port: int = 443) -> str:
     ip = to_str(ip)
     if ":" in ip:
         ip = "[" + ip + "]"
@@ -107,7 +111,7 @@ def get_ip_str(ip, port=443):
 domain_allowed = re.compile("(?!-)[A-Z\\d-]{1,63}(?<!-)$")
 
 
-def check_domain_valid(hostname):
+def check_domain_valid(hostname: str) -> bool:
     if len(hostname) > 255:
         return False
     if hostname.endswith("."):
@@ -116,7 +120,7 @@ def check_domain_valid(hostname):
     return all(domain_allowed.match(x) for x in hostname.split("."))
 
 
-def str2hex(data):
+def str2hex(data: Union[str, bytes]) -> str:
     data = to_bytes(data)
     return data.hex(':')
 
@@ -200,18 +204,18 @@ class SimpleCondition(object):
         self.lock.release()
 
 
-def split_domain(host):
+def split_domain(host: Union[str, bytes]) -> tuple[bytes, bytes]:
     host = to_bytes(host)
     hl = host.split(b".")
     return hl[0], b".".join(hl[1:])
 
 
-def ip_string_to_num(s):
+def ip_string_to_num(s: str) -> int:
     """Convert dotted IPv4 address to integer."""
     return reduce(lambda a, b: a << 8 | b, list(map(int, s.split("."))))
 
 
-def ip_num_to_string(ip):
+def ip_num_to_string(ip: int) -> str:
     """Convert 32-bit integer to dotted IPv4 address."""
     return ".".join([str(ip >> n & 0xFF) for n in [24, 16, 8, 0]])
 
@@ -236,7 +240,7 @@ for b, e in private_ipv4_range:
     private_ipv4_range_bin.append((bb, ee))
 
 
-def is_private_ip(ip):
+def is_private_ip(ip: Union[str, bytes]) -> bool:
     ip = to_str(ip)
     try:
         if "." in ip:
@@ -268,11 +272,11 @@ import string
 printable = set(string.printable)
 
 
-def get_printable(s):
+def get_printable(s: str) -> list[str]:
     return [x for x in s if x in printable]
 
 
-def compare_version(version, reference_version):
+def compare_version(version: str, reference_version: str) -> int:
     try:
         p = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
         m1 = p.match(version)
@@ -291,7 +295,7 @@ def compare_version(version, reference_version):
         raise e
 
 
-def map_with_parameter(function, datas, args):
+def map_with_parameter(function: Any, datas: Any, args: Any) -> list:
     l = []
     for data in datas:
         d_out = function(data, args)
@@ -299,7 +303,7 @@ def map_with_parameter(function, datas, args):
     return l
 
 
-def to_bytes(data, coding='utf-8'):
+def to_bytes(data: Any, coding: str = 'utf-8') -> Any:
     if isinstance(data, bytes):
         return data
     if isinstance(data, string_types):
@@ -317,7 +321,7 @@ def to_bytes(data, coding='utf-8'):
     return bytes(data)
 
 
-def to_str(data, coding='utf-8'):
+def to_str(data: Any, coding: str = 'utf-8') -> Any:
     if isinstance(data, string_types):
         return data
     if isinstance(data, bytes):
@@ -337,7 +341,7 @@ def to_str(data, coding='utf-8'):
     return str(data)
 
 
-def bytes2str_only(data, coding='utf-8'):
+def bytes2str_only(data: Any, coding: str = 'utf-8') -> Any:
     if isinstance(data, bytes):
         return data.decode(coding)
     if isinstance(data, dict):
@@ -350,7 +354,7 @@ def bytes2str_only(data, coding='utf-8'):
         return data
 
 
-def merge_two_dict(x, y):
+def merge_two_dict(x: dict, y: dict) -> dict:
     """Given two dictionaries, merge them into a new dict as a shallow copy."""
     z = x.copy()
     z.update(y)

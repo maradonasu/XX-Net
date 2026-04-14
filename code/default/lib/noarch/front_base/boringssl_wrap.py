@@ -340,7 +340,7 @@ class SSLContext(object):
         try:
             bssl.BSSL_SSL_CTX_set_num_tickets(self.ctx, 0)
             bssl.BSSL_SSL_CTX_set_permute_extensions(self.ctx, 1)
-        except:
+        except Exception:
             self.logger.info("boringsssl not support permute extension")
 
         bssl.SetCompression(self.ctx)
