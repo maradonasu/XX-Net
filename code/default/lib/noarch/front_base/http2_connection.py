@@ -1,6 +1,6 @@
 import time
 
-from six.moves import queue
+import queue
 import threading
 import socket
 import errno

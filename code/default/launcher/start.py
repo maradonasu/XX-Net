@@ -23,8 +23,6 @@ default_path = os.path.abspath(os.path.join(current_path, os.path.pardir))
 noarch_lib = os.path.abspath(os.path.join(default_path, 'lib', 'noarch'))
 sys.path.append(noarch_lib)
 
-import py3_compat
-
 import env_info
 data_path = env_info.data_path
 data_launcher_path = os.path.join(data_path, 'launcher')

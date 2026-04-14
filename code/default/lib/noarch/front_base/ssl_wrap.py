@@ -1,13 +1,12 @@
 
 # this wrap has a close callback.
-# Which is used by  ip manager
-#  ip manager keep a connection number counter for every ip.
+# Which is used by ip manager
+# ip manager keep a connection number counter for every ip.
 
-# the wrap SSL implementation, python 2.7 will use pyOpenSSL, python 3.x will use build in ssl.
+# The wrap SSL implementation using Python 3 built-in ssl module.
 # This can also be used to store some attribute like ip_str/appid
 
 import os
-import sys
 import datetime
 import socket
 import ssl
@@ -173,15 +172,9 @@ class SSLConnection(object):
         try:
             return self.__iowait(self._connection.send, data, flags)
         except Exception as e:
-            #self.logger.exception("ssl send:%r", e)
             raise
 
-    def __send_memoryview(self, data, flags=0):
-        if hasattr(data, 'tobytes'):
-            data = data.tobytes()
-        return self.__send(data, flags)
-
-    send = __send if sys.version_info >= (2, 7, 5) else __send_memoryview
+    send = __send
 
     def recv(self, bufsiz, flags=0):
         pending = self._connection.pending()
@@ -210,9 +203,6 @@ class SSLConnection(object):
                     pass
                 return ret
             except Exception as e:
-                if sys.version_info[0] == 2 and e == errno.EAGAIN:
-                    continue
-                # logging.exception("recv %r", e)
                 raise e
 
     def read(self, bufsiz, flags=0):
@@ -237,10 +227,7 @@ class SSLConnection(object):
             return
 
         if self.timeout != t:
-            if sys.version_info[0] == 3:
-                self._connection.settimeout(t)
-            else:
-                self._sock.settimeout(t)
+            self._connection.settimeout(t)
             self.timeout = t
 
     def makefile(self, mode='r', bufsize=-1):
@@ -263,12 +250,8 @@ class SSLContext(object):
             ssl_version = ssl.PROTOCOL_TLSv1_1
         elif hasattr(ssl, "PROTOCOL_TLSv1"):
             ssl_version = ssl.PROTOCOL_TLSv1
-        elif hasattr(ssl, "PROTOCOL_SSLv3"):
-            ssl_version = ssl.PROTOCOL_SSLv3
-        elif hasattr(ssl, "PROTOCOL_SSLv2"):
-            ssl_version = ssl.PROTOCOL_SSLv2
         else:
-            ssl_version = ssl.PROTOCOL_SSLv23
+            ssl_version = ssl.PROTOCOL_TLSv23
 
         self.logger.info("SSL use version:%s", self.supported_protocol())
         self.context = ssl.SSLContext(protocol=ssl_version)
@@ -338,21 +321,14 @@ class SSLContext(object):
         return ssl_version
 
     def set_ca(self, ca_certs):
-        if sys.version_info[0] == 3:
-            try:
-                if ca_certs:
-                    self.context.load_verify_locations(cafile=os.path.abspath(ca_certs))
-                    self.context.verify_mode = ssl.CERT_REQUIRED
-                else:
-                    self.context.verify_mode = ssl.CERT_NONE
-            except Exception as e:
-                self.logger.debug("set_ca fail:%r", e)
-        else:
+        try:
             if ca_certs:
-                self.context.load_verify_locations(os.path.abspath(ca_certs))
-                self.context.set_verify(OpenSSL.SSL.VERIFY_PEER, lambda c, x, e, d, ok: ok)
+                self.context.load_verify_locations(cafile=os.path.abspath(ca_certs))
+                self.context.verify_mode = ssl.CERT_REQUIRED
             else:
-                self.context.set_verify(OpenSSL.SSL.VERIFY_NONE, lambda c, x, e, d, ok: ok)
+                self.context.verify_mode = ssl.CERT_NONE
+        except Exception as e:
+            self.logger.debug("set_ca fail:%r", e)
 
 
 from pyasn1.codec.der.decoder import decode

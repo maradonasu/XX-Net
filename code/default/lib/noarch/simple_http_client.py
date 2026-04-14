@@ -2,7 +2,7 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
-import selectors2 as selectors
+import selectors
 from xlog import getLogger
 xlog = getLogger("simple_http_client")
 

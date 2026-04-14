@@ -8,7 +8,7 @@ import json
 import shutil
 from os.path import join
 
-from six import string_types
+string_types = str
 
 import utils
 

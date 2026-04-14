@@ -65,7 +65,7 @@ try:
 except:
     from collections.abc import Callable
 
-from six import string_types
+string_types = str
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 python_path = os.path.abspath( os.path.join(current_path, os.pardir, os.pardir))

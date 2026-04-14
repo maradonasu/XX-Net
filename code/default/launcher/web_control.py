@@ -24,7 +24,6 @@ if __name__ == "__main__":
     sys.path.append(noarch_lib)
 
 
-import py3_compat
 import sys_platform
 from xlog import getLogger, keep_log
 

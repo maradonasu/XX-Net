@@ -1,7 +1,6 @@
 import socket
 import struct
 import time
-import sys
 
 import socks
 import utils
@@ -118,91 +117,35 @@ class ConnectCreator(object):
         return ssl_sock
 
     def check_cert(self, ssl_sock):
-        if sys.version_info[0] == 3:
-            try:
-                peer_cert = ssl_sock.get_cert()
-            except Exception as e:
-                self.logger.exception("check_cert %r", e)
+        try:
+            peer_cert = ssl_sock.get_cert()
+        except Exception as e:
+            self.logger.exception("check_cert %r", e)
 
-            if self.debug:
-                self.logger.debug("cert:%r", peer_cert)
+        if self.debug:
+            self.logger.debug("cert:%r", peer_cert)
 
-            if self.config.check_commonname:
-                if not peer_cert["issuer_commonname"].startswith(self.config.check_commonname):
-                    raise socket.error(' certificate is issued by %r' % (peer_cert["issuer_commonname"]))
+        if self.config.check_commonname:
+            if not peer_cert["issuer_commonname"].startswith(self.config.check_commonname):
+                raise socket.error(' certificate is issued by %r' % (peer_cert["issuer_commonname"]))
 
-            if isinstance(self.config.check_sni, str):
-                if self.config.check_sni not in peer_cert["altName"]:
-                    raise socket.error(
-                        'check sni fail:%s, alt_names:%s' % (self.config.check_sni, peer_cert["altName"]))
+        if isinstance(self.config.check_sni, str):
+            if self.config.check_sni not in peer_cert["altName"]:
+                raise socket.error(
+                    'check sni fail:%s, alt_names:%s' % (self.config.check_sni, peer_cert["altName"]))
 
-            elif self.config.check_sni:
-                alt_name = peer_cert["altName"]
-                if isinstance(alt_name, str):
-                    if not ssl_sock.sni.endswith(alt_name):
-                        raise socket.error(
-                            'check %s sni:%s fail, alt_names:%s' % (ssl_sock.ip_str, ssl_sock.sni, alt_name))
-                elif isinstance(alt_name, list):
-                    for alt_name_n in alt_name:
-                        if ssl_sock.sni.endswith(alt_name_n):
-                            return
+        elif self.config.check_sni:
+            alt_name = peer_cert["altName"]
+            if isinstance(alt_name, str):
+                if not ssl_sock.sni.endswith(alt_name):
                     raise socket.error(
                         'check %s sni:%s fail, alt_names:%s' % (ssl_sock.ip_str, ssl_sock.sni, alt_name))
-
-        else:
-            import OpenSSL
-            cert_chain = ssl_sock.get_peer_cert_chain()
-            if not cert_chain:
-                raise socket.error('certificate is none, sni:%s' % ssl_sock.sni)
-
-            if len(cert_chain) < self.config.min_intermediate_CA:
-                raise socket.error('No intermediate CA was found.')
-
-            if self.config.check_pkp and hasattr(OpenSSL.crypto, "dump_publickey"):
-                # old OpenSSL not support this function.
-                pub_key = OpenSSL.crypto.dump_publickey(OpenSSL.crypto.FILETYPE_PEM,
-                                                        cert_chain[1].get_pubkey())
-                if pub_key not in self.config.CHECK_PKP:
-                    # google_ip.report_connect_fail(ip, force_remove=True)
-                    raise socket.error('The intermediate CA is mismatching.')
-            self.get_ssl_cert_domain(ssl_sock)
-            issuer_commonname = next((v for k, v in cert_chain[0].get_issuer().get_components() if k == 'CN'), '')
-            if self.debug:
-                for cert in cert_chain:
-                    for k, v in cert.get_issuer().get_components():
-                        if k != "CN":
-                            continue
-                        cn = v
-                        self.logger.debug("cn:%s", cn)
-
-                self.logger.debug("issued by:%s", issuer_commonname)
-                self.logger.debug("Common Name:%s", ssl_sock.domain)
-
-            if self.config.check_commonname and not issuer_commonname.startswith(self.config.check_commonname):
-                raise socket.error(' certificate is issued by %r' % (issuer_commonname))
-
-            cert = ssl_sock.get_peer_certificate()
-            if not cert:
-                raise socket.error('certificate is none')
-
-            if self.config.check_sni:
-                # get_subj_alt_name cost near 100ms. be careful.
-                try:
-                    alt_names = ConnectCreator.get_subj_alt_name(cert)
-                except Exception as e:
-                    # self.logger.warn("get_subj_alt_name fail:%r", e)
-                    alt_names = [""]
-
-                if self.debug:
-                    self.logger.debug('alt names: "%s"', '", "'.join(alt_names))
-
-                if isinstance(self.config.check_sni, str):
-                    if self.config.check_sni not in alt_names:
-                        raise socket.error('check sni fail, alt_names:%s' % (alt_names))
-                else:
-                    alt_names = tuple(alt_names)
-                    if not ssl_sock.sni.endswith(alt_names):
-                        raise socket.error('check sni:%s fail, alt_names:%s' % (ssl_sock.sni, alt_names))
+            elif isinstance(alt_name, list):
+                for alt_name_n in alt_name:
+                    if ssl_sock.sni.endswith(alt_name_n):
+                        return
+                raise socket.error(
+                    'check %s sni:%s fail, alt_names:%s' % (ssl_sock.ip_str, ssl_sock.sni, alt_name))
 
     def get_ssl_cert_domain(self, ssl_sock):
         cert = ssl_sock.get_peer_certificate()

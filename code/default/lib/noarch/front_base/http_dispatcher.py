@@ -16,7 +16,7 @@ performance:
  get the fastest worker to process the request.
  sorted by rtt and pipeline task on load.
 """
-from six.moves import queue
+import queue
 import random
 import operator
 import threading

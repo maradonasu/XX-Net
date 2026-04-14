@@ -5,7 +5,7 @@ import re
 import os
 import threading
 from functools import reduce
-from six import string_types
+string_types = str
 
 ipv4_pattern = re.compile(br'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$')
 

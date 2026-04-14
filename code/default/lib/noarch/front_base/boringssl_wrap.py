@@ -5,7 +5,7 @@
 import socket
 import threading
 
-import selectors2 as selectors
+import selectors
 import utils
 
 from boringssl import lib as bssl, ffi

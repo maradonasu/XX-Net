@@ -7,9 +7,42 @@ import xstruct as struct
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
-import selectors2 as selectors
+import selectors
 
 import utils
+
+
+class _SelectorWrapper(selectors.DefaultSelector):
+    def register_event(self, fileobj, event, data):
+        try:
+            key = self._fd_to_key[self._fileobj_lookup(fileobj)]
+        except KeyError:
+            return self.register(fileobj, event, data)
+
+        if key.events & event:
+            return
+        else:
+            events = key.events | event
+            self.unregister(fileobj)
+            self.register(fileobj, events, data)
+
+    def unregister_event(self, fileobj, event):
+        try:
+            key = self._fd_to_key[self._fileobj_lookup(fileobj)]
+        except KeyError:
+            return
+
+        if not key.events & event:
+            return key
+
+        if key.events == event:
+            self.unregister(fileobj)
+            return
+        else:
+            events = key.events & ~event
+            data = key.data
+            self.unregister(fileobj)
+            return self.register(fileobj, events, data)
 
 from xlog import getLogger
 xlog = getLogger("x_tunnel")
@@ -386,7 +419,7 @@ class ConnectionPipe(object):
         self.xlog = xlog
         self.running = True
         self.th = None
-        self.select2 = selectors.DefaultSelector()
+        self.select2 = _SelectorWrapper()
         self.sock_conn_map = {}
         self._lock = threading.RLock()
 
@@ -494,7 +527,7 @@ class ConnectionPipe(object):
             self.close_sock(sock, "reset_all")
 
         self.sock_conn_map = {}
-        self.select2 = selectors.DefaultSelector()
+        self.select2 = _SelectorWrapper()
 
     def notice_select(self):
         self.xlog.debug("notice select")

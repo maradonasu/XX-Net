@@ -10,7 +10,7 @@ allowing small reads from the network. This represents a potentially massive
 performance optimisation at the cost of burning some memory in the userspace
 process.
 """
-import selectors2 as selectors
+import selectors
 import socket
 from .exceptions import ConnectionResetError, LineTooLongError
 # import logging
