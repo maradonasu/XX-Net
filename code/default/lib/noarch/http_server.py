@@ -53,8 +53,6 @@ class HttpServerHandler(BaseHTTPRequestHandler):
     rbufsize = 32 * 1024
     wbufsize = 32 * 1024
     
-    res_headers: Dict[str, str] = {}
-    
     def __init__(self, sock: socket.socket, client: Tuple[str, int], 
                  args: Any, logger: Optional[Any] = None) -> None:
         self.connection = sock
@@ -70,6 +68,7 @@ class HttpServerHandler(BaseHTTPRequestHandler):
         self.close_connection = 0
         self.command = ""
         self.path = ""
+        self.res_headers = {}
         self.headers: Dict[bytes, bytes] = {}
         self.setup()
 
