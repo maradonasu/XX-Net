@@ -23,9 +23,13 @@
 - **问题**：`do_connect` 创建 socket 后使用 blocking 模式 + timeout，导致 selector 行为不一致
 - **修复**：connect 成功后立即调用 `sock.setblocking(False)`
 
+### hyper 替换（已解决）
+- **根因**：hyper 0.5.0 捆绑库已废弃，需要用 h2/hpack/hyperframe 替代
+- **方案**：创建 `hyper_compat` shim 模块，提供 hyper 兼容接口，底层使用 pip 包
+
 ## Accomplished
 
-### ✅ 已完成（23 个提交）
+### ✅ 已完成（27 个提交）
 
 | Commit | 内容 |
 |--------|------|
@@ -50,8 +54,11 @@
 | `1cddd021` | recv BlockingIOError 不关闭连接 |
 | `4cb2a11e` | Fix selector race: use getsockopt, set non-blocking |
 | `789054b4` | Fix socket handoff: HTTPServer must not close handed-off sockets |
+| `3a3e1879` | Add SOCKS5 proxy integration tests for GitHub access |
+| `d91fb59f` | Update progress.md: add SOCKS5 test info |
+| `8f419066` | Phase 2.1.2: Replace hyper bundled library with h2/hpack/hyperframe from pip |
 
-**测试状态**：87 tests pass, 3 pre-existing DNS failures
+**测试状态**：92 tests pass, 3 pre-existing DNS failures
 
 **新增测试**：`test_xtunnel_socks5.py` - SOCKS5 代理集成测试
 - `test_socks5_port_open` - 验证 SOCKS5 端口监听
@@ -60,19 +67,33 @@
 
 **人工测试**：✅ `curl -x socks5://127.0.0.1:1080 https://github.com` 成功返回 HTTP/1.1 200
 
+**删除代码统计**：
+- Phase 1: ~1,500 行（six.py, py3_compat.py, pyopenssl_wrap.py, selectors2.py）
+- Phase 2: ~54,000 行（捆绑库）
+- Phase 2.1.2: ~17,800 行（hyper 捆绑库）
+- **总计删除：~73,300 行**
+
 ### 📋 待完成
 
 | 任务 | 状态 | 风险 |
 |------|------|-------|
 | Phase 3.2: HTTP client 替换 | pending | 中 |
+| Phase 3.3: 异常处理（剩余 ~68 处裸 except:） | pending | 低 |
+| Phase 3.4: 全局状态迁移 | pending | 中 |
+| Phase 3.5: 类型注解（剩余模块） | pending | 低 |
+| Phase 5.1: CI/CD（GitHub Actions） | pending | 低 |
 | Phase 4: asyncio 改造 | pending | 高 |
 
 ## Relevant files
 
-### 核心修复文件
-- `code/default/lib/noarch/http_server.py` — HTTPServer with handoff_socket flag
-- `code/default/x_tunnel/local/proxy_handler.py` — Socks5Server with finish() method
-- `code/default/x_tunnel/local/base_container.py` — _SelectorWrapper, do_connect fixes
+### 新增文件
+- `code/default/lib/noarch/hyper_compat/__init__.py` — hyper shim（~500 行）
+
+### 核心修改文件
+- `code/default/lib/noarch/front_base/http2_connection.py` — 使用 hyper_compat
+- `code/default/lib/noarch/front_base/http2_stream.py` — 使用 hyper_compat
+- `code/default/lib/noarch/front_base/check_ip.py` — 使用 HTTP20Connection from hyper_compat
 
 ### 下一步
-Phase 3.1 HTTP server 替换已完成并通过人工测试。可以继续 Phase 3.2 HTTP client 替换。
+Phase 2.1.2 (hyper 替换) 和 Phase 2.1.3 (socks.py 替换) 已完成。
+可以继续 Phase 3.2 HTTP client 替换。
