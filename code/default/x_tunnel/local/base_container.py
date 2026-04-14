@@ -509,9 +509,13 @@ class ConnectionPipe(object):
         self.xlog.debug(fmt, *args, **kwargs)
 
     def add_sock_event(self, sock, conn, event):
-        # this function can repeat without through an error.
-
         if not sock:
+            return
+
+        try:
+            if sock.fileno() < 0:
+                return
+        except Exception:
             return
 
         with self._lock:
@@ -808,6 +812,11 @@ class Conn(object):
             self.cmd_queue[seq] = data.get_buf()
             if seq == self.next_cmd_seq:
                 if self.sock:
+                    try:
+                        if self.sock.fileno() < 0:
+                            return
+                    except Exception:
+                        return
                     self.connection_pipe.add_sock_event(self.sock, self, selectors.EVENT_WRITE)
                 else:
                     self.process_cmd()
