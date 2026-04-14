@@ -63,11 +63,6 @@ xlog.info("data path: %s", data_path)
 from front_base import openssl_wrap
 xlog.info("TLS implementation: %s", openssl_wrap.implementation)
 
-try:
-    import OpenSSL
-except Exception as e2:
-    print("import pyOpenSSL fail:", e2)
-
 running_file = os.path.join(data_launcher_path, "Running.Lck")
 
 

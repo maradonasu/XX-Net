@@ -172,11 +172,11 @@ def current_version():
     try:
         with open(readme_file) as fd:
             content = fd.read()
-            p = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
-            m = p.match(content)
-                if m:
-                    version = m.group(1) + "." + m.group(2) + "." + m.group(3)
-                    return version
+        p = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
+        m = p.match(content)
+        if m:
+            version = m.group(1) + "." + m.group(2) + "." + m.group(3)
+            return version
     except (IOError, OSError):
         xlog.warn("get_version_fail in update_from_github")
 

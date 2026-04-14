@@ -96,9 +96,9 @@ def sha1_file(filename):
             while len(buf) > 0:
                 hasher.update(buf)
                 buf = afile.read(BLOCKSIZE)
-            return hasher.hexdigest()
-        except (IOError, OSError):
-            return False
+        return hasher.hexdigest()
+    except (IOError, OSError):
+        return False
 
 
 def install_module(module, new_version):
