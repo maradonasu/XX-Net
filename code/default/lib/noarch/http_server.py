@@ -508,23 +508,43 @@ class HTTPServer:
         self.max_thread = max_thread
         self.check_listen_interval = check_listen_interval
         self.running = False
+        self.sockets: List[socket.socket] = []
     
-    def start(self) -> None:
+    def init_socket(self) -> None:
         for addr in self.addresses:
             try:
                 server = ThreadedHTTPServer(addr, self.handler, self.args, 
                                           self.logger, self.max_thread,
                                           self.check_listen_interval)
                 self.servers.append(server)
-                t = threading.Thread(target=server.serve_forever, 
-                                     name="serve_%s:%d" % addr)
-                t.daemon = True
-                t.start()
+                self.sockets.append(server.socket)
                 self.logger.info("server %s:%d started.", addr[0], addr[1])
             except Exception as e:
                 self.logger.error("bind to %s:%d fail:%r", addr[0], addr[1], e)
+                raise
+    
+    def serve_forever(self) -> None:
+        if not self.servers:
+            self.init_socket()
         
         self.running = True
+        for server in self.servers:
+            t = threading.Thread(target=server.serve_forever, 
+                                 name="serve_%s:%d" % server.server_address)
+            t.daemon = True
+            t.start()
+        
+        while self.running:
+            time.sleep(1)
+    
+    def start(self) -> None:
+        self.init_socket()
+        self.running = True
+        for server in self.servers:
+            t = threading.Thread(target=server.serve_forever, 
+                                 name="serve_%s:%d" % server.server_address)
+            t.daemon = True
+            t.start()
     
     def shutdown(self) -> None:
         self.running = False
