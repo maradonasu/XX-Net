@@ -106,3 +106,20 @@ class TestTypeAnnotations(TestCase):
             content = f.read()
         self.assertIn('class XTunnelContext', content)
         self.assertIn('def is_running(self) -> bool', content)
+
+    def test_http_server_uses_stdlib(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'http_server.py')
+        self.assertTrue(os.path.exists(fpath))
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('from http.server import', content)
+        self.assertIn('from socketserver import ThreadingMixIn', content)
+        self.assertIn('class ThreadedHTTPServer', content)
+        self.assertIn('class HttpServerHandler(BaseHTTPRequestHandler)', content)
+
+    def test_simple_http_server_is_shim(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'simple_http_server.py')
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('Compatibility shim', content)
+        self.assertIn('from http_server import', content)
