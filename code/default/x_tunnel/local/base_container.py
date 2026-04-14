@@ -47,6 +47,36 @@ class _SelectorWrapper(selectors.DefaultSelector):
             self.unregister(fileobj)
             return self.register(fileobj, events, data)
 
+    def select(self, timeout: Optional[float] = None) -> list:
+        try:
+            return super().select(timeout)
+        except (OSError, ValueError) as e:
+            if self._is_bad_fd_error(e):
+                self._purge_stale_fds()
+                return []
+            raise
+
+    @staticmethod
+    def _is_bad_fd_error(e: Exception) -> bool:
+        msg = str(e)
+        return any(s in msg for s in ("10038", "非套接字", "Invalid argument",
+                                       "Bad file descriptor", "EBADF"))
+
+    def _purge_stale_fds(self) -> None:
+        stale = []
+        for fd, key in list(self._fd_to_key.items()):
+            try:
+                fno = key.fileobj.fileno()
+                if fno < 0:
+                    stale.append(key.fileobj)
+            except Exception:
+                stale.append(key.fileobj)
+        for fileobj in stale:
+            try:
+                self.unregister(fileobj)
+            except KeyError:
+                pass
+
 from xlog import getLogger
 xlog = getLogger("x_tunnel")
 
@@ -561,10 +591,8 @@ class ConnectionPipe(object):
                         # self.xlog.debug("%s recv select timeout switch to 0.001", random_id)
                         timeout = 0.001
                 except Exception as e:
-                    self.xlog.exception("Conn session:%s select except:%r", self.session.session_id, e)
-                    if "Invalid argument" in str(e) or "10038" in str(e) or "非套接字" in str(e):
-                        self.reset_all_connections()
-                    time.sleep(1)
+                    self.xlog.debug("Conn session:%s select except:%r", self.session.session_id, e)
+                    time.sleep(0.01)
                     continue
 
                 now = time.time()
