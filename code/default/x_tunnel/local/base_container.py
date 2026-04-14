@@ -50,35 +50,22 @@ class _SelectorWrapper(selectors.DefaultSelector):
     def select(self, timeout: Optional[float] = None) -> list:
         try:
             return super().select(timeout)
-        except (OSError, ValueError) as e:
-            if self._is_bad_fd_error(e):
-                self._purge_stale_fds()
-                return []
-            raise
+        except (OSError, ValueError):
+            bad_keys = [(fd, key) for fd, key in list(self._fd_to_key.items())
+                        if not self._fd_ok(key.fileobj)]
+            for fd, key in bad_keys:
+                try:
+                    self.unregister(key.fileobj)
+                except KeyError:
+                    pass
+            return []
 
     @staticmethod
-    def _is_bad_fd_error(e: Exception) -> bool:
-        msg = str(e)
-        return any(s in msg for s in ("10038", "10022", "非套接字", "无效的参数",
-                                       "Invalid argument", "Bad file descriptor", "EBADF"))
-
-    def _purge_stale_fds(self) -> None:
-        import select as _select
-        stale = []
-        for fd, key in list(self._fd_to_key.items()):
-            try:
-                fno = key.fileobj.fileno()
-                if fno < 0:
-                    stale.append(key.fileobj)
-                    continue
-                _select.select([key.fileobj], [], [], 0)
-            except Exception:
-                stale.append(key.fileobj)
-        for fileobj in stale:
-            try:
-                self.unregister(fileobj)
-            except KeyError:
-                pass
+    def _fd_ok(fileobj: Any) -> bool:
+        try:
+            return fileobj.fileno() >= 0
+        except Exception:
+            return False
 
 from xlog import getLogger
 xlog = getLogger("x_tunnel")
