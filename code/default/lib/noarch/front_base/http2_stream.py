@@ -18,15 +18,14 @@ the stream by the endpoint that initiated the stream.
 import threading
 import time
 
-from hyper.common.headers import HTTPHeaderMap
-from hyper.packages.hyperframe.frame import (
+from hyper_compat import (
+    HTTPHeaderMap,
     FRAME_MAX_LEN, FRAMES, HeadersFrame, DataFrame, PushPromiseFrame,
-    WindowUpdateFrame, ContinuationFrame, BlockedFrame, RstStreamFrame
+    WindowUpdateFrame, ContinuationFrame, BlockedFrame, RstStreamFrame,
+    ProtocolError, StreamResetError,
+    h2_safe_headers, strip_headers,
+    to_host_port_tuple, to_native_string, to_bytestring
 )
-from hyper.http20.exceptions import ProtocolError, StreamResetError
-from hyper.http20.util import h2_safe_headers
-from hyper.http20.response import strip_headers
-from hyper.common.util import to_host_port_tuple, to_native_string, to_bytestring
 import simple_http_client
 
 from .http_common import *

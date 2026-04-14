@@ -1,7 +1,7 @@
 import socket
 import time
 
-import hyper
+from hyper_compat import HTTP20Connection
 import simple_http_client
 import utils
 

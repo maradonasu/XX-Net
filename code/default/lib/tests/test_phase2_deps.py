@@ -38,9 +38,16 @@ class TestBundledLibsRemoved(TestCase):
         fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'socks.py')
         self.assertFalse(os.path.isfile(fpath), 'bundled socks.py should be deleted')
 
+    def test_hyper_deleted(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'hyper')
+        self.assertFalse(os.path.isdir(fpath), 'bundled hyper/ should be deleted')
+
 
 class TestPipImportsWork(TestCase):
     """Phase 2: Verify pip-installed packages work as imports."""
+
+    def _code_root(self):
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
     def test_pyasn1_import(self):
         from pyasn1.codec.der.decoder import decode
@@ -63,6 +70,28 @@ class TestPipImportsWork(TestCase):
         import socks
         self.assertTrue(hasattr(socks, 'socksocket'))
         self.assertTrue(hasattr(socks, 'set_default_proxy'))
+
+    def test_h2_import(self):
+        from h2.connection import H2Connection
+        self.assertTrue(callable(H2Connection))
+
+    def test_hpack_import(self):
+        from hpack import Encoder, Decoder
+        self.assertTrue(callable(Encoder))
+        self.assertTrue(callable(Decoder))
+
+    def test_hyperframe_import(self):
+        from hyperframe.frame import DataFrame, HeadersFrame, SettingsFrame
+        self.assertTrue(callable(DataFrame))
+        self.assertTrue(callable(HeadersFrame))
+        self.assertTrue(callable(SettingsFrame))
+
+    def test_hyper_compat_import(self):
+        sys.path.insert(0, os.path.join(self._code_root(), 'lib', 'noarch'))
+        from hyper_compat import HTTP20Connection, BufferedSocket, FlowControlManager
+        self.assertTrue(callable(HTTP20Connection))
+        self.assertTrue(callable(BufferedSocket))
+        self.assertTrue(callable(FlowControlManager))
 
 
 class TestXlogStdlibLogging(TestCase):
@@ -169,3 +198,6 @@ class TestRequirementsUpdated(TestCase):
         self.assertIn('ecdsa', content)
         self.assertIn('PySocks', content)
         self.assertIn('sortedcontainers', content)
+        self.assertIn('h2', content)
+        self.assertIn('hpack', content)
+        self.assertIn('hyperframe', content)

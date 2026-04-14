@@ -10,18 +10,14 @@ from ssl import SSLError
 from .http_common import *
 
 
-from hyper.common.bufsocket import BufferedSocket
-from hyper.common.exceptions import ConnectionResetError
-
-from hyper.packages.hyperframe.frame import (
-    FRAMES, DataFrame, HeadersFrame, PushPromiseFrame, RstStreamFrame,
+from hyper_compat import (
+    BufferedSocket, ConnectionResetError, FlowControlManager,
+    DataFrame, HeadersFrame, PushPromiseFrame, RstStreamFrame,
     SettingsFrame, Frame, WindowUpdateFrame, GoAwayFrame, PingFrame,
-    BlockedFrame, FRAME_MAX_ALLOWED_LEN, FRAME_MAX_LEN
+    BlockedFrame, FRAME_MAX_ALLOWED_LEN, FRAME_MAX_LEN,
+    Encoder, Decoder, FRAMES
 )
 from .http2_stream import Stream
-from hyper.http20.window import BaseFlowControlManager
-
-from hyper.packages.hpack import Encoder, Decoder
 
 # this is defined in rfc7540
 # default window size 64k
@@ -29,34 +25,6 @@ DEFAULT_WINDOW_SIZE = 65535
 
 # default max frame is 16k, defined in rfc7540
 DEFAULT_MAX_FRAME = FRAME_MAX_LEN
-
-
-class FlowControlManager(BaseFlowControlManager):
-    """
-    ``hyper``'s default flow control manager.
-
-    This implements hyper's flow control algorithms. This algorithm attempts to
-    reduce the number of WINDOWUPDATE frames we send without blocking the remote
-    endpoint behind the flow control window.
-
-    This algorithm will become more complicated over time. In the current form,
-    the algorithm is very simple:
-        - When the flow control window gets less than 3/4 of the maximum size,
-          increment back to the maximum.
-        - Otherwise, if the flow control window gets to less than 1kB, increment
-          back to the maximum.
-    """
-    def increase_window_size(self, frame_size):
-        future_window_size = self.window_size - frame_size
-
-        if ((future_window_size < (self.initial_window_size * 3 / 4)) or
-            (future_window_size < 1000)):
-            return self.initial_window_size - future_window_size
-
-        return 0
-
-    def blocked(self):
-        return self.initial_window_size - self.window_size
 
 
 class RawFrame(object):

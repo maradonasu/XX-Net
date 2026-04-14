@@ -3,10 +3,7 @@
 from front_base.http2_stream import Stream as StreamBase
 from front_base.http2_stream import STATE_OPEN
 
-from hyper.packages.hyperframe.frame import (
-    FRAME_MAX_LEN, HeadersFrame
-)
-from hyper.common.util import to_native_string
+from hyper_compat import FRAME_MAX_LEN, HeadersFrame, to_native_string
 
 
 class Stream(StreamBase):

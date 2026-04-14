@@ -9,3 +9,6 @@ PySocks>=1.7.0
 sortedcontainers>=2.4.0
 brotli>=1.0.0
 httpx>=0.28.0
+h2>=4.0.0
+hpack>=4.0.0
+hyperframe>=6.0.0
