@@ -80,11 +80,6 @@ class _SelectorWrapper(selectors.DefaultSelector):
                 fno = key.fileobj.fileno()
                 if fno < 0:
                     bad.append(key.fileobj)
-                    continue
-                try:
-                    key.fileobj.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-                except OSError:
-                    bad.append(key.fileobj)
             except Exception:
                 bad.append(key.fileobj)
         for fileobj in bad:
@@ -630,7 +625,7 @@ class ConnectionPipe(object):
                         except BlockingIOError:
                             continue
                         except Exception as e:
-                            self.xlog.info("conn:%d fd:%d recv e:%r type:%s", conn.conn_id, sock.fileno() if hasattr(sock, 'fileno') else -1, e, type(e).__name__)
+                            self._debug_log("conn:%d fd:%d recv e:%r type:%s", conn.conn_id, sock.fileno() if hasattr(sock, 'fileno') else -1, e, type(e).__name__)
                             self.close_sock(sock, "recv_error")
                             continue
 
@@ -890,10 +885,15 @@ class Conn(object):
                                self.host, self.port)
                     self.transfer_peer_close("connect fail")
                 else:
-                    self.xlog.info("Conn session:%s conn:%d %s:%d", self.session.session_id, self.conn_id, self.host,
-                              self.port)
+                    self.xlog.info("Conn session:%s conn:%d %s:%d fd:%d", self.session.session_id, self.conn_id, self.host,
+                              self.port, sock.fileno())
                     self.sock = sock
-                    self.connection_pipe.add_sock_event(self.sock, self, selectors.EVENT_READ)
+                    self._fd = sock.fileno()
+                    try:
+                        self.connection_pipe.add_sock_event(self.sock, self, selectors.EVENT_READ)
+                    except Exception as e:
+                        self.xlog.warn("add_sock_event failed: %r", e)
+                        self.stop("add_event_fail")
             else:
                 self.xlog.error("Conn session:%s conn:%d unknown cmd_id:%d",
                                 self.session.session_id, self.conn_id, cmd_id)

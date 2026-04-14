@@ -47,6 +47,15 @@ class Socks5Server():
         self.read_buffer: bytes = b""
         self.buffer_start: int = 0
         self.args: object = args
+        self.handoff_socket = False
+
+    def finish(self) -> None:
+        if self.handoff_socket:
+            return
+        try:
+            self.connection.close()
+        except Exception:
+            pass
 
     def handle(self) -> None:
         self.__class__.handle_num += 1
@@ -191,6 +200,7 @@ class Socks5Server():
             g.session.conn_list[conn_id].transfer_received_data(self.read_buffer[self.buffer_start:])
 
         g.session.conn_list[conn_id].start(block=True)
+        self.handoff_socket = True
 
     def socks5_handler(self) -> None:
         sock = self.connection
@@ -258,6 +268,7 @@ class Socks5Server():
             g.session.conn_list[conn_id].transfer_received_data(self.read_buffer[self.buffer_start:])
 
         g.session.conn_list[conn_id].start(block=True)
+        self.handoff_socket = True
 
     def https_handler(self) -> None:
         line = self.read_crlf_line()
@@ -299,6 +310,7 @@ class Socks5Server():
             g.session.conn_list[conn_id].transfer_received_data(self.read_buffer[self.buffer_start:])
 
         g.session.conn_list[conn_id].start(block=True)
+        self.handoff_socket = True
 
     def http_handler(self, first_char: bytes) -> None:
         req_line = self.read_crlf_line()
@@ -360,4 +372,5 @@ class Socks5Server():
         g.session.conn_list[conn_id].transfer_received_data(left_buf)
 
         g.session.conn_list[conn_id].start(block=True)
+        self.handoff_socket = True
 

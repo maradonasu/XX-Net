@@ -66,6 +66,7 @@ class HttpServerHandler(BaseHTTPRequestHandler):
         self.rfile = self.connection.makefile('rb', self.rbufsize)
         self.wfile = self.connection.makefile('wb', self.wbufsize)
         self.close_connection = 0
+        self.handoff_socket = False
         self.command = ""
         self.path = ""
         self.res_headers = {}
@@ -76,6 +77,8 @@ class HttpServerHandler(BaseHTTPRequestHandler):
         pass
 
     def finish(self) -> None:
+        if self.handoff_socket:
+            return
         try:
             self.connection.close()
         except Exception:
@@ -477,10 +480,13 @@ class ThreadedHTTPServer(ThreadingMixIn, TCPServer):
             except TypeError:
                 handler = self.RequestHandlerClass(request, client_address, self.args)
             handler.handle()
+            handler.finish()
         except Exception as e:
             self.logger.exception("process_request_thread error:%r", e)
-        finally:
-            request.close()
+            try:
+                request.close()
+            except Exception:
+                pass
 
 
 class HTTPServer:
