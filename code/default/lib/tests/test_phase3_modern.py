@@ -79,3 +79,30 @@ class TestTypeAnnotations(TestCase):
         self.assertIn('def decrypt_data(data: ', content)
         self.assertIn('def create_conn(self, sock: socket.socket', content)
         self.assertIn('def login_session(self) -> bool', content)
+
+    def test_connect_creator_has_type_annotations(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'front_base', 'connect_creator.py')
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('from __future__ import annotations', content)
+        self.assertIn('from typing import', content)
+        self.assertIn('def __init__(self, logger: Any', content)
+        self.assertIn('def connect_ssl(self, ip_str: ', content)
+
+    def test_front_dispatcher_has_type_annotations(self):
+        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'front_dispatcher.py')
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('from __future__ import annotations', content)
+        self.assertIn('from typing import', content)
+        self.assertIn('all_fronts: List[Any]', content)
+        self.assertIn('def get_front(host: str', content)
+        self.assertIn('def request(method: str', content)
+
+    def test_context_class_exists(self):
+        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'context.py')
+        self.assertTrue(os.path.exists(fpath))
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('class XTunnelContext', content)
+        self.assertIn('def is_running(self) -> bool', content)

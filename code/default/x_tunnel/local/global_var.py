@@ -1,3 +1,14 @@
+#!/usr/bin/env python3
+# coding:utf-8
+"""
+Global variables for X-Tunnel module.
+
+This module provides backward-compatible module-level globals.
+New code can optionally import context.py and use XTunnelContext
+for better type safety, but existing code can continue using
+this module directly.
+"""
+
 xxnet_version = ""
 client_uuid = ""
 system = ""

@@ -1,22 +1,25 @@
+from __future__ import annotations
+
 import time
 import threading
 import os
 import random
 from threading import Lock
 from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-all_fronts = []
-light_fronts = []
-session_fronts = []
-cloudflare_front = None
-statistic_thread = None
-_initialized = False
-_statistic_running = False
-_init_lock = Lock()
-_front_fail_counts = defaultdict(int)
-_front_last_fail_time = defaultdict(float)
-FRONT_FAIL_BASE_PENALTY = 1000
-FRONT_PENALTY_DECAY_SECONDS = 30
+all_fronts: List[Any] = []
+light_fronts: List[Any] = []
+session_fronts: List[Any] = []
+cloudflare_front: Optional[Any] = None
+statistic_thread: Optional[threading.Thread] = None
+_initialized: bool = False
+_statistic_running: bool = False
+_init_lock: Lock = Lock()
+_front_fail_counts: Dict[str, int] = defaultdict(int)
+_front_last_fail_time: Dict[str, float] = defaultdict(float)
+FRONT_FAIL_BASE_PENALTY: int = 1000
+FRONT_PENALTY_DECAY_SECONDS: int = 30
 
 from . import global_var as g
 import utils
@@ -31,7 +34,7 @@ data_xtunnel_path = os.path.join(data_path, 'x_tunnel')
 xlog = getLogger("x_tunnel", log_path=data_xtunnel_path, save_start_log=500, save_warning_log=True)
 
 
-def init():
+def init() -> None:
     global cloudflare_front, statistic_thread, _initialized, _statistic_running
 
     with _init_lock:
@@ -91,7 +94,7 @@ def init():
         _initialized = True
 
 
-def save_cloudflare_domain(domains):
+def save_cloudflare_domain(domains: List[str]) -> None:
     if not g.config.enable_cloudflare:
         xlog.warn("save_cloudflare_domain but cloudflare front not enabled")
         return
@@ -103,7 +106,7 @@ def save_cloudflare_domain(domains):
         front.ip_manager.save_domains(domains)
 
 
-def front_staticstic_thread():
+def front_staticstic_thread() -> None:
     while g.running and _statistic_running:
         for front in all_fronts:
             dispatcher = front.get_dispatcher()
@@ -117,7 +120,7 @@ def front_staticstic_thread():
 get_front_lock = Lock()
 _front_ready_cond = threading.Condition(get_front_lock)
 
-def _get_front_penalty(front):
+def _get_front_penalty(front: Any) -> int:
     fail_count = _front_fail_counts[front.name]
     if fail_count == 0:
         return 0
@@ -128,21 +131,21 @@ def _get_front_penalty(front):
     decay_factor = max(0, 1.0 - (time_since_fail / FRONT_PENALTY_DECAY_SECONDS))
     return int(fail_count * FRONT_FAIL_BASE_PENALTY * decay_factor)
 
-def _record_front_success(front):
+def _record_front_success(front: Any) -> None:
     _front_fail_counts[front.name] = 0
     notify_front_ready()
 
-def _record_front_fail(front):
+def _record_front_fail(front: Any) -> None:
     _front_fail_counts[front.name] += 1
     _front_last_fail_time[front.name] = time.time()
     notify_front_ready()
 
 
-def notify_front_ready():
+def notify_front_ready() -> None:
     with _front_ready_cond:
         _front_ready_cond.notify_all()
 
-def get_front(host, timeout):
+def get_front(host: str, timeout: float) -> Optional[Any]:
     start_time = time.monotonic()
     if host in ["dns.xx-net.org", g.config.api_server]:
         fronts = light_fronts
@@ -185,7 +188,7 @@ def get_front(host, timeout):
     return None
 
 
-def count_connection(host):
+def count_connection(host: str) -> int:
     fronts = session_fronts
 
     num = 0
@@ -201,7 +204,8 @@ def count_connection(host):
     return num
 
 
-def request(method, host, path="/", headers={}, data="", timeout=100):
+def request(method: str, host: str, path: str = "/", headers: Dict[str, str] = {},
+            data: Union[str, bytes] = "", timeout: float = 100) -> Tuple[Union[str, bytes], int, Any]:
     start_time = time.monotonic()
 
     content, status, response = "", 603, {}
@@ -262,7 +266,7 @@ def request(method, host, path="/", headers={}, data="", timeout=100):
     return content, status, response
 
 
-def set_session_host(host):
+def set_session_host(host: str) -> None:
     global session_fronts
     for front in session_fronts:
         dispatcher = front.get_dispatcher(host)
@@ -273,7 +277,7 @@ def set_session_host(host):
     notify_front_ready()
 
 
-def stop():
+def stop() -> None:
     global all_fronts, light_fronts, session_fronts, cloudflare_front
     global statistic_thread, _initialized, _statistic_running
     global _front_fail_counts, _front_last_fail_time

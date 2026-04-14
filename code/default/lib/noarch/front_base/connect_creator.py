@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import socket
 import struct
 import time
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import socks
 import utils
@@ -10,24 +13,24 @@ from pyasn1.codec.der import decoder as der_decoder
 
 
 class ConnectCreator(object):
-    def __init__(self, logger, config, openssl_context=None, host_manager=None,
-                 timeout=5, debug=False,
-                 check_cert=None):
-        self.logger = logger
-        self.config = config
-        self.openssl_context = openssl_context
-        self.host_manager = host_manager
-        self.timeout = self.config.socket_timeout
-        self.debug = debug or self.config.show_state_debug
-        self.peer_cert = None
+    def __init__(self, logger: Any, config: Any, openssl_context: Optional[Any] = None,
+                 host_manager: Optional[Any] = None, timeout: int = 5, debug: bool = False,
+                 check_cert: Optional[Callable[[Any], None]] = None) -> None:
+        self.logger: Any = logger
+        self.config: Any = config
+        self.openssl_context: Optional[Any] = openssl_context
+        self.host_manager: Optional[Any] = host_manager
+        self.timeout: int = self.config.socket_timeout
+        self.debug: bool = debug or self.config.show_state_debug
+        self.peer_cert: Optional[Dict[str, Any]] = None
         if check_cert:
             self.check_cert = check_cert
         self.update_config()
 
-        self.connect_force_http1 = self.config.connect_force_http1
-        self.connect_force_http2 = self.config.connect_force_http2
+        self.connect_force_http1: bool = self.config.connect_force_http1
+        self.connect_force_http2: bool = self.config.connect_force_http2
 
-    def update_config(self):
+    def update_config(self) -> None:
         if int(self.config.PROXY_ENABLE):
 
             if self.config.PROXY_TYPE == "HTTP":
@@ -46,7 +49,8 @@ class ConnectCreator(object):
                                     username=self.config.PROXY_USER,
                                     password=self.config.PROXY_PASSWD)
 
-    def connect_ssl(self, ip_str, sni, host, close_cb=None):
+    def connect_ssl(self, ip_str: Union[str, bytes], sni: Union[str, bytes], host: str,
+                    close_cb: Optional[Callable[[], None]] = None) -> Any:
         ip_str = utils.to_str(ip_str)
 
         if self.debug:
@@ -116,7 +120,7 @@ class ConnectCreator(object):
 
         return ssl_sock
 
-    def check_cert(self, ssl_sock):
+    def check_cert(self, ssl_sock: Any) -> None:
         try:
             peer_cert = ssl_sock.get_cert()
         except Exception as e:
@@ -147,7 +151,7 @@ class ConnectCreator(object):
                 raise socket.error(
                     'check %s sni:%s fail, alt_names:%s' % (ssl_sock.ip_str, ssl_sock.sni, alt_name))
 
-    def get_ssl_cert_domain(self, ssl_sock):
+    def get_ssl_cert_domain(self, ssl_sock: Any) -> None:
         cert = ssl_sock.get_peer_certificate()
         if not cert:
             raise Exception("no cert")
@@ -156,7 +160,7 @@ class ConnectCreator(object):
         ssl_sock.domain = ssl_cert.cn
 
     @staticmethod
-    def get_subj_alt_name(peer_cert):
+    def get_subj_alt_name(peer_cert: Any) -> List[str]:
         '''
         Copied from ndg.httpsclient.ssl_peer_verification.ServerSSLCertVerification
         Extract subjectAltName DNS name settings from certificate extensions
