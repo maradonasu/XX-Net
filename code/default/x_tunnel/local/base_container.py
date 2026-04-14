@@ -634,9 +634,12 @@ class ConnectionPipe(object):
                     if event & selectors.EVENT_READ:
                         try:
                             data = sock.recv(65535)
+                        except BlockingIOError:
+                            continue
                         except Exception as e:
                             self._debug_log("conn:%d recv e:%r", conn.conn_id, e)
-                            data = ""
+                            self.close_sock(sock, "recv_error")
+                            continue
 
                         data_len = len(data)
                         if data_len == 0:
