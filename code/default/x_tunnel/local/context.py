@@ -3,23 +3,36 @@
 """
 XTunnelContext - Encapsulated global state for X-Tunnel module.
 
-This class replaces the module-level globals pattern with a class instance,
-providing better type safety and encapsulation while maintaining backward
-compatibility through the global_var module.
+All module-level globals from the former global_var.py are now
+attributes of a single XTunnelContext instance.  The global_var
+module re-exports this instance for backward compatibility.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
-from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 
-@dataclass
 class XTunnelStat:
-    roundtrip_num: int = 0
-    slow_roundtrip: int = 0
-    timeout_roundtrip: int = 0
-    resend: int = 0
+    __slots__ = ('roundtrip_num', 'slow_roundtrip', 'timeout_roundtrip', 'resend')
+
+    def __init__(
+        self,
+        roundtrip_num: int = 0,
+        slow_roundtrip: int = 0,
+        timeout_roundtrip: int = 0,
+        resend: int = 0,
+    ) -> None:
+        self.roundtrip_num = roundtrip_num
+        self.slow_roundtrip = slow_roundtrip
+        self.timeout_roundtrip = timeout_roundtrip
+        self.resend = resend
+
+    def __getitem__(self, key: str) -> int:
+        return getattr(self, key)
+
+    def __setitem__(self, key: str, value: int) -> None:
+        setattr(self, key, value)
 
 
 class XTunnelContext:
@@ -48,18 +61,18 @@ class XTunnelContext:
 
         self.promote_code: str = ""
         self.promoter: str = ""
-        self.quota_list: Dict[str, Any] = field(default_factory=dict)
+        self.quota_list: Dict[str, Any] = {}
         self.quota: int = 0
         self.paypal_button_id: str = ""
-        self.plans: Dict[str, Any] = field(default_factory=dict)
+        self.plans: Dict[str, Any] = {}
 
         self.server_host: str = ""
         self.server_port: int = 0
-        self.selectable: List[Any] = field(default_factory=list)
+        self.selectable: List[Any] = []
         self.balance: float = 0.0
         self.openai_balance: float = 0.0
-        self.openai_proxies: List[Any] = field(default_factory=list)
-        self.tls_relays: Dict[str, Any] = field(default_factory=dict)
+        self.openai_proxies: List[Any] = []
+        self.tls_relays: Dict[str, Any] = {}
 
         self.stat: XTunnelStat = XTunnelStat()
 

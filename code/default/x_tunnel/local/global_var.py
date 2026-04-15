@@ -1,54 +1,34 @@
 #!/usr/bin/env python3
 # coding:utf-8
 """
-Global variables for X-Tunnel module.
+Backward-compatible global state module backed by XTunnelContext.
 
-This module provides backward-compatible module-level globals.
-New code can optionally import context.py and use XTunnelContext
-for better type safety, but existing code can continue using
-this module directly.
+All attribute access is delegated to a singleton XTunnelContext instance.
+Existing ``from . import global_var as g`` usage continues to work.
+
+New code can import the context directly::
+
+    from .context import ctx
 """
 
-xxnet_version = ""
-client_uuid = ""
-system = ""
+import sys
+from .context import XTunnelContext
 
-running = True
-protocol_version = 4
-bind_port = 0
-last_refresh_time = 0
-login_process = False
-data_path = None
 
-config = None
-http_client = None
-cloudflare_front = None
-cloudfront_front = None
-tls_relay_front = None
-seley_front = None
+class _GlobalVarProxy:
+    def __init__(self, ctx: XTunnelContext) -> None:
+        self.__dict__['_ctx'] = ctx
 
-session = None
-socks5_server = None
-last_api_error = ""
+    def __getattr__(self, name: str):
+        return getattr(self._ctx, name)
 
-promote_code = ""
-promoter = ""
-quota_list = {}
-quota = 0
-paypal_button_id = ""
-plans = {}
+    def __setattr__(self, name: str, value) -> None:
+        setattr(self._ctx, name, value)
 
-server_host = ""
-server_port = 0
-selectable = []
-balance = 0
-openai_balance = 0
-openai_proxies = []
-tls_relays = {}
+    def __delattr__(self, name: str) -> None:
+        delattr(self._ctx, name)
 
-stat = {
-    "roundtrip_num": 0,
-    "slow_roundtrip": 0,
-    "timeout_roundtrip": 0,
-    "resend": 0
-}
+
+ctx = XTunnelContext()
+_proxy = _GlobalVarProxy(ctx)
+sys.modules[__name__] = _proxy
