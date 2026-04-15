@@ -15,6 +15,8 @@ import os
 import utils
 import ssl
 
+import httpx
+
 
 class Connection():
     def __init__(self, sock):
@@ -152,7 +154,6 @@ class Response(BaseResponse):
                     if time_left < 0:
                         break
 
-                    # select.select([self.sock], [], [self.sock], time_left)
                     self.select2.select(timeout=time_left)
                     continue
                 else:
@@ -272,7 +273,6 @@ class Response(BaseResponse):
                 if time_left < 0:
                     raise socket.error
 
-                # r, w, e = select.select([self.sock], [], [self.sock], time_left)
                 events = self.select2.select(timeout=time_left)
                 for key, event in events:
                     if not event & selectors.EVENT_READ:
@@ -317,7 +317,6 @@ class Response(BaseResponse):
                     if time_left < 0:
                         raise socket.timeout
 
-                    # select.select([self.sock], [], [self.sock], time_left)
                     self.select2.select(timeout=time_left)
                     continue
                 else:
@@ -362,6 +361,28 @@ class Response(BaseResponse):
             return self._read_plain(int(self.content_length), timeout=timeout)
 
 
+def _build_proxy_url(proxy_dict):
+    if not proxy_dict:
+        return None
+    if isinstance(proxy_dict, str):
+        return proxy_dict
+
+    scheme = proxy_dict.get("type", "http")
+    host = proxy_dict.get("host", "")
+    port = proxy_dict.get("port", "")
+    user = proxy_dict.get("user")
+    password = proxy_dict.get("pass")
+
+    netloc = ""
+    if user and password:
+        netloc = f"{user}:{password}@"
+    netloc += host
+    if port:
+        netloc += f":{port}"
+
+    return f"{scheme}://{netloc}"
+
+
 class Client(object):
     def __init__(self, proxy=None, timeout=60, cert=""):
         self.timeout = timeout
@@ -387,184 +408,72 @@ class Client(object):
         else:
             self.proxy = None
 
-    @staticmethod
-    def direct_connect(host, port):
-        connect_timeout = 30
+        self._httpx_client = None
 
-        if b':' in host:
-            info = [(socket.AF_INET6, socket.SOCK_STREAM, 0, "", (host, port, 0, 0))]
-        elif utils.check_ip_valid4(host):
-            info = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", (host, port))]
-        else:
-            try:
-                info = socket.getaddrinfo(host, port, socket.AF_UNSPEC,
-                                          socket.SOCK_STREAM)
-            except socket.gaierror:
-                info = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", (host, port))]
+    def _get_httpx_client(self):
+        if self._httpx_client is not None:
+            return self._httpx_client
 
-        for res in info:
-            af, socktype, proto, canonname, sa = res
-            ip_port = (sa[0], sa[1])
-            s = None
-            try:
-                s = socket.socket(af, socktype, proto)
-                # See http://groups.google.com/group/cherrypy-users/
-                #        browse_frm/thread/bbfe5eb39c904fe0
-
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 32 * 1024)
-                s.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, True)
-                s.settimeout(connect_timeout)
-                s.connect(ip_port)
-                return s
-            except socket.error as e:
-                xlog.warn("direct connect %s except:%r", sa, e)
-                if s:
-                    s.close()
-
-        return None
-
-    def connect(self, host, port, tls):
-        if self.sock and host == self.host and port == self.port and self.tls == tls:
-            return self.sock
-
-        if not self.proxy:
-            sock = self.direct_connect(host, port)
-            if not sock:
-                return None
-        else:
-            connect_timeout = self.timeout
-
-            import socks
-
-            sock = socks.socksocket(socket.AF_INET)
-            sock.set_proxy(proxy_type=self.proxy["type"],
-                           addr=self.proxy["host"],
-                           port=self.proxy["port"], rdns=True,
-                           username=self.proxy["user"],
-                           password=self.proxy["pass"])
-
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 32 * 1024)
-            sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, True)
-            sock.settimeout(connect_timeout)
-            sock.connect((host, port))
-
-            # conn_time = time.time() - start_time
-            # xlog.debug("proxy:%s tcp conn:%s time:%d", proxy["host"], host, conn_time * 1000)
-
-        if tls:
-            if not self.ssl_context:
-                self.ssl_context = ssl.create_default_context()
-                self.ssl_context.check_hostname = False
-                self.ssl_context.verify_mode = ssl.CERT_REQUIRED
-
+        proxy_url = _build_proxy_url(self.proxy)
+        verify = True
+        if self.cert:
             if os.path.isfile(self.cert):
-                sock = self.ssl_context.wrap_socket(sock, server_hostname=host)
+                verify = self.cert
 
-        self.sock = sock
-        self.host = host
-        self.port = port
-        self.tls = tls
-
-        return sock
+        self._httpx_client = httpx.Client(
+            proxy=proxy_url,
+            timeout=self.timeout,
+            verify=verify,
+            follow_redirects=False,
+        )
+        return self._httpx_client
 
     def request(self, method, url, headers=None, body=b"", read_payload=True):
         if headers is None:
             headers = {}
-        method = utils.to_bytes(method)
-        url = utils.to_bytes(url)
+        url = utils.to_str(url)
+        method = utils.to_str(method).upper()
 
-        upl = urlsplit(url)
-        headers["Content-Length"] = str(len(body))
-        headers["Host"] = upl.netloc
-        port = upl.port
-        if not port:
-            if upl.scheme == b"http":
-                port = 80
-            elif upl.scheme == b"https":
-                port = 443
-            else:
-                raise Exception("unknown method:%s" % upl.scheme)
-
-        path = upl.path
-        if not path:
-            path = b"/"
-
-        if upl.query:
-            path += b"?" + upl.query
-
-        try:
-            sock = self.connect(upl.hostname, port, upl.scheme == b"https")
-        except Exception as e:
-            xlog.warn("connect %s:%s fail:%r", upl.hostname, port, e)
-            return None
-
-        if not sock:
-            return None
-
-        request_data = b'%s %s HTTP/1.1\r\n' % (method, path)
-
-        for k, v in headers.items():
-            if isinstance(v, int):
-                request_data += b'%s: %d\r\n' % (utils.to_bytes(k), v)
-            else:
-                request_data += b'%s: %s\r\n' % (utils.to_bytes(k), utils.to_bytes(v))
-
-        request_data += b'\r\n'
-
-        body = utils.to_bytes(body)
-
-        try:
-            if len(request_data) + len(body) < 1300:
-                body = request_data + body
-            else:
-                sock.send(request_data)
-
-            payload_len = len(body)
-            start = 0
-            while start < payload_len:
-                send_size = min(payload_len - start, 65535)
-                sended = sock.send(body[start:start + send_size])
-                start += sended
-
-            sock.settimeout(self.timeout)
-            response = Response(sock)
-
-            response.begin(timeout=self.timeout)
-        except Exception as e:
-            return None
-
-        if response.status != 200:
-            # logging.warn("status:%r", response.status)
-            return response
-
-        if not read_payload:
-            return response
-
-        if b'Transfer-Encoding' in response.headers:
-            data_buffer = []
-            while True:
-                try:
-                    data = response.read(8192, timeout=self.timeout)
-                except IncompleteRead as e:
-                    data = e.partial
-                except Exception as e:
-                    raise e
-
-                if not data:
-                    break
-                else:
-                    data_buffer.append(data)
-
-            response.text = b"".join(data_buffer)
-            return response
+        if isinstance(body, (bytes, bytearray, memoryview)):
+            content = bytes(body) if body else b""
+        elif isinstance(body, str):
+            content = body.encode("utf-8")
         else:
-            content_length = int(response.getheader(b'Content-Length', b"0"))
-            if content_length:
-                response.text = response.read(content_length, timeout=self.timeout)
+            content = b""
 
-            return response
+        try:
+            client = self._get_httpx_client()
+            resp = client.request(
+                method=method,
+                url=url,
+                headers=headers,
+                content=content,
+            )
+        except httpx.TimeoutException:
+            xlog.debug("httpx request %s timeout", url)
+            return None
+        except httpx.ConnectError as e:
+            xlog.warn("httpx connect %s fail:%r", url, e)
+            return None
+        except Exception as e:
+            xlog.warn("httpx request %s fail:%r", url, e)
+            return None
+
+        response = BaseResponse(
+            status=resp.status_code,
+            reason=resp.reason_phrase.encode("utf-8") if resp.reason_phrase else b"",
+            headers={},
+        )
+
+        for key, value in resp.headers.multi_items():
+            response.headers[key.title()] = value.encode("utf-8") if isinstance(value, str) else value
+
+        if read_payload:
+            response.text = resp.content
+        else:
+            response.text = b""
+
+        return response
 
 
 def request(method="GET", url=None, headers=None, body=b"", proxy=None, timeout=60, read_payload=True):
