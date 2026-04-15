@@ -171,7 +171,7 @@ class TestNoSelectors2(TestCase):
             os.path.join(code_root, 'lib', 'noarch'),
             os.path.join(code_root, 'x_tunnel'),
         ]
-        dirs_to_skip = ['ecdsa', 'hyper', 'tlslite', 'pyasn1', 'sortedcontainers',
+        dirs_to_skip = ['ecdsa', 'hyper', 'pyasn1', 'sortedcontainers',
                         'asn1crypto', 'dnslib', 'scrypto', '__pycache__']
         for search_root in search_dirs:
             for root, dirs, files in os.walk(search_root):

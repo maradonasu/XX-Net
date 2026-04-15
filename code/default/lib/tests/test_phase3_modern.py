@@ -7,7 +7,7 @@ class TestNoBareExcept(TestCase):
     """Phase 3.3: Verify no bare except: in project code (excluding vendored libs)."""
 
     VENDORED_DIRS = {
-        'hyper', 'tlslite', 'scrypto', 'idna', 'boringssl',
+        'hyper', 'scrypto', 'idna', 'boringssl',
         '__pycache__', 'tests',
     }
 

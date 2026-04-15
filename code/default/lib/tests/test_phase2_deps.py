@@ -42,6 +42,14 @@ class TestBundledLibsRemoved(TestCase):
         fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'hyper')
         self.assertFalse(os.path.isdir(fpath), 'bundled hyper/ should be deleted')
 
+    def test_tlslite_deleted(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'tlslite')
+        self.assertFalse(os.path.isdir(fpath), 'bundled tlslite/ should be deleted')
+
+    def test_tlslite_wrap_deleted(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'front_base', 'tlslite_wrap.py')
+        self.assertFalse(os.path.isfile(fpath), 'tlslite_wrap.py should be deleted')
+
 
 class TestPipImportsWork(TestCase):
     """Phase 2: Verify pip-installed packages work as imports."""
