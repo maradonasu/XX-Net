@@ -429,7 +429,7 @@ class Http2Worker(HttpWorker):
 
             # If an error occured, try to read the error description from
             # code registry otherwise use the frame's additional data.
-            error_string = frame._extra_info()
+            error_string = getattr(frame, 'additional_data', b'') or getattr(frame, 'explain', '') or ''
             time_cost = time.time() - self.last_recv_time
             # if frame.additional_data != b"session_timed_out":
             #     self.logger.warn("goaway:%s, t:%d", error_string, time_cost)

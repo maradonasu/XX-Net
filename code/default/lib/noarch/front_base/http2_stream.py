@@ -286,7 +286,7 @@ class Stream(object):
                 self.logger.exception("decode h2 header %s fail:%r", header_data, e)
                 raise e
 
-            self.response_headers = HTTPHeaderMap(headers)
+            self.response_headers = HTTPHeaderMap(dict(headers))
 
             # We've handled the headers, zero them out.
             self.response_header_datas = None
