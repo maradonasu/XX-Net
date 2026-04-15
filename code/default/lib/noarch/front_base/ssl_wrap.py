@@ -184,7 +184,7 @@ class SSLConnection(object):
         try:
             return self.__iowait(self._connection.recv, bufsiz, flags)
         except Exception:
-            return ''
+            return b''
 
     def recv_into(self, buf, nbytes=None):
         pending = self._connection.pending()
