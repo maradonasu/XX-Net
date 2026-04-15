@@ -47,7 +47,7 @@
 
 ## Accomplished
 
-### ✅ 已完成（40 个提交）
+### ✅ 已完成（41 个提交）
 
 | Phase | 内容 |
 |-------|------|
@@ -60,9 +60,11 @@
 | **Phase 3.4** | 全局状态封装为 XTunnelContext（proxy 模式保持向后兼容） |
 | **Phase 3.5** | 核心模块类型注解（utils, base_container, connect_manager, connect_creator, front_dispatcher, proxy_handler, proxy_session, context） |
 | **Phase 5.1** | CI/CD 更新（Python 3.12/3.13, Linux/Windows/macOS） |
+| **Phase 5.2** | 测试覆盖率提升（base_container, proxy_session 辅助函数单元测试） |
+| **Phase 5.3** | 集成测试框架（纯 Python Mock 服务器：HTTP/HTTP2/SOCKS5） |
 | **Bug fixes** | ssl_wrap.recv(), HTTP/2 短读取, HTTPHeaderMap 初始化 |
 
-**测试状态**：93 tests pass, 3 pre-existing DNS failures
+**测试状态**：129 tests pass, 3 pre-existing DNS failures（新增 36 tests）
 
 **人工测试**：✅ `curl -x socks5://127.0.0.1:1080 https://github.com` 成功返回 HTTP/1.1 200
 
@@ -78,8 +80,7 @@
 | 任务 | 状态 | 风险 |
 |------|------|-------|
 | Phase 4: asyncio 改造 | pending（可选） | 高 |
-| Phase 5.2: 测试覆盖率提升 | pending | 低 |
-| Phase 5.3: 集成测试框架 | pending | 中 |
+| Phase 5.2: 更多核心模块测试 | pending | 低 |
 | Phase 5.5: Web UI 现代化 | pending | 低 |
 | Phase 5.7: 移除 tlslite 捆绑 | pending | 低 |
 
@@ -90,3 +91,10 @@
 - `code/default/x_tunnel/local/context.py` — XTunnelContext + XTunnelStat
 - `code/default/x_tunnel/local/global_var.py` — _GlobalVarProxy 委托到 XTunnelContext
 - `.github/workflows/ci.yml` — CI/CD 配置
+- `code/default/lib/tests/mock_servers/__init__.py` — Mock 服务器基类
+- `code/default/lib/tests/mock_servers/http_mock.py` — HTTP Mock 服务器
+- `code/default/lib/tests/mock_servers/http2_mock.py` — HTTP/2 Mock 服务器
+- `code/default/lib/tests/mock_servers/socks5_mock.py` — SOCKS5 Mock target
+- `code/default/lib/tests/test_base_container.py` — base_container 单元测试（27 tests）
+- `code/default/lib/tests/test_proxy_session.py` — proxy_session 辅助函数测试（4 tests）
+- `code/default/lib/tests/test_integration_framework.py` — 集成测试框架验证（5 tests）
