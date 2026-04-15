@@ -230,7 +230,7 @@ class Stream(object):
             if not self.task.finished:
                 self.task.put_data(frame.data)
 
-            if b'END_STREAM' not in frame.flags:
+            if 'END_STREAM' not in frame.flags:
                 # Increase the window size. Only do this if the data frame contains
                 # actual data.
                 # don't do it if stream is closed.
@@ -269,7 +269,7 @@ class Stream(object):
             self.logger.error("%s Received unknown frame, type %d", self.ip_str, frame.type)
             pass
 
-        if b'END_HEADERS' in frame.flags:
+        if 'END_HEADERS' in frame.flags:
             if self.response_headers is not None:
                 raise ProtocolError("Too many header blocks.")
 
@@ -302,7 +302,7 @@ class Stream(object):
                 self.task.set_state("h2_get_head")
                 self.send_response()
 
-        if b'END_STREAM' in frame.flags:
+        if 'END_STREAM' in frame.flags:
             xcost = self.response_headers.get("X-Cost", -1)
             if isinstance(xcost, list):
                 xcost = float(xcost[0])

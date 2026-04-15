@@ -370,9 +370,9 @@ class HTTP20Connection:
                     frame.parse_body(memoryview(data))
                 
                 if frame.type == SettingsFrame.type:
-                    if b'ACK' not in frame.flags:
+                    if 'ACK' not in frame.flags:
                         ack = SettingsFrame(0)
-                        ack.flags.add(b'ACK')
+                        ack.flags.add('ACK')
                         self._sock.send(ack.serialize())
                 elif frame.type == HeadersFrame.type:
                     if frame.stream_id in self.streams:
@@ -423,7 +423,7 @@ class HTTP20Connection:
         encoded = self.encoder.encode(req_headers)
         f = HeadersFrame(stream_id)
         f.data = encoded
-        f.flags.add(b'END_HEADERS')
+        f.flags.add('END_HEADERS')
         self._sock.send(f.serialize())
         
         return stream_id
@@ -436,12 +436,12 @@ class HTTP20Connection:
         if body:
             f = DataFrame(stream_id)
             f.data = body
-            f.flags.add(b'END_STREAM')
+            f.flags.add('END_STREAM')
             self._sock.send(f.serialize())
         else:
             f = DataFrame(stream_id)
             f.data = b''
-            f.flags.add(b'END_STREAM')
+            f.flags.add('END_STREAM')
             self._sock.send(f.serialize())
     
     def get_response(self, stream_id: int = None) -> HTTP20Response:

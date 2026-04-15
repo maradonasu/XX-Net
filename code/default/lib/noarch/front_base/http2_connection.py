@@ -390,7 +390,7 @@ class Http2Worker(HttpWorker):
             self.increase_remote_window_size(frame.window_increment)
 
         elif frame.type == PingFrame.type:
-            if b'ACK' in frame.flags:
+            if 'ACK' in frame.flags:
                 ping_time = struct.unpack("!d", frame.opaque_data)[0]
                 time_now = time.time()
                 rtt = (time_now - ping_time) * 1000
@@ -403,15 +403,15 @@ class Http2Worker(HttpWorker):
             else:
                 # The spec requires us to reply with PING+ACK and identical data.
                 p = PingFrame(0)
-                p.flags.add(b'ACK')
+                p.flags.add('ACK')
                 p.opaque_data = frame.opaque_data
                 self._send_cb(p)
 
         elif frame.type == SettingsFrame.type:
-            if b'ACK' not in frame.flags:
+            if 'ACK' not in frame.flags:
                 # send ACK as soon as possible
                 f = SettingsFrame(0)
-                f.flags.add(b'ACK')
+                f.flags.add('ACK')
                 self._send_cb(f)
 
                 # this may trigger send DataFrame blocked by remote window
