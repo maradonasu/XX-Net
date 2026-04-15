@@ -35,6 +35,11 @@
 - `simple_http_client.py` 高层 `Client`/`request()` 用 httpx 替换
 - 底层 `BaseResponse`/`Response`/`Connection` 保留用于 socket 级解析
 
+### HTTP/2 运行时 bug（已解决）
+- **ssl_wrap.recv() str/bytes**：Line 187 异常时返回 `''` 而非 `b''`，导致 `struct.unpack()` 失败
+- **HTTP/2 短读取**：`recv(9)` 可能返回少于 9 字节，导致 `InvalidFrameError`
+- **HTTPHeaderMap 初始化**：`hpack.Decoder.decode()` 返回 list of tuples，`HTTPHeaderMap(headers)` 错误构造字典
+
 ### global_var 封装（已解决）
 - **方案**：`global_var.py` 用 `_GlobalVarProxy` 替换模块自身（`sys.modules` 替换），所有属性委托到 `XTunnelContext` 单例
 - `XTunnelStat` 支持 `__getitem__`/`__setitem__` 保持 `g.stat["key"]` 向后兼容
@@ -42,7 +47,7 @@
 
 ## Accomplished
 
-### ✅ 已完成（37 个提交）
+### ✅ 已完成（40 个提交）
 
 | Phase | 内容 |
 |-------|------|
@@ -55,8 +60,9 @@
 | **Phase 3.4** | 全局状态封装为 XTunnelContext（proxy 模式保持向后兼容） |
 | **Phase 3.5** | 核心模块类型注解（utils, base_container, connect_manager, connect_creator, front_dispatcher, proxy_handler, proxy_session, context） |
 | **Phase 5.1** | CI/CD 更新（Python 3.12/3.13, Linux/Windows/macOS） |
+| **Bug fixes** | ssl_wrap.recv(), HTTP/2 短读取, HTTPHeaderMap 初始化 |
 
-**测试状态**：92 tests pass, 3 pre-existing DNS failures
+**测试状态**：93 tests pass, 3 pre-existing DNS failures
 
 **人工测试**：✅ `curl -x socks5://127.0.0.1:1080 https://github.com` 成功返回 HTTP/1.1 200
 
