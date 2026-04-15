@@ -47,7 +47,7 @@
 
 ## Accomplished
 
-### ✅ 已完成（43 个提交）
+### ✅ 已完成（44 个提交）
 
 | Phase | 内容 |
 |-------|------|
@@ -59,13 +59,14 @@
 | **Phase 3.3** | 64 处裸 `except:` → 类型化异常 |
 | **Phase 3.4** | 全局状态封装为 XTunnelContext（proxy 模式保持向后兼容） |
 | **Phase 3.5** | 核心模块类型注解（utils, base_container, connect_manager, connect_creator, front_dispatcher, proxy_handler, proxy_session, context） |
+| **Phase 4** | asyncio 基础设施 + async 模块实现（事件循环管理器, async HTTP 服务器/客户端, async SOCKS5, async SSL 连接） |
 | **Phase 5.1** | CI/CD 更新（Python 3.12/3.13, Linux/Windows/macOS） |
 | **Phase 5.2** | 测试覆盖率提升（base_container 27t, proxy_session 4t, connect_creator 8t, front_dispatcher 9t） |
 | **Phase 5.3** | 集成测试框架（纯 Python Mock 服务器：HTTP/HTTP2/SOCKS5） |
 | **Phase 5.7** | 移除 tlslite 捆绑（~2MB, 148 文件 + tlslite_wrap.py） |
 | **Bug fixes** | ssl_wrap.recv(), HTTP/2 短读取, HTTPHeaderMap 初始化 |
 
-**测试状态**：148 tests pass, 3 pre-existing DNS failures（新增 53 tests）
+**测试状态**：166 tests pass, 3 pre-existing DNS failures（新增 71 tests）
 
 **人工测试**：✅ `curl -x socks5://127.0.0.1:1080 https://github.com` 成功返回 HTTP/1.1 200
 
@@ -81,7 +82,7 @@
 
 | 任务 | 状态 | 风险 |
 |------|------|-------|
-| Phase 4: asyncio 改造 | pending（可选） | 高 |
+| Phase 4 集成: 将同步代码逐步切换到 async 模块 | pending | 高 |
 | Phase 5.5: Web UI 现代化 | pending | 低 |
 
 ## Relevant files
@@ -100,3 +101,10 @@
 - `code/default/lib/tests/test_connect_creator.py` — connect_creator 单元测试（8 tests）
 - `code/default/lib/tests/test_front_dispatcher.py` — front_dispatcher 单元测试（9 tests）
 - `code/default/lib/tests/test_integration_framework.py` — 集成测试框架验证（5 tests）
+- `code/default/lib/noarch/async_loop.py` — asyncio 事件循环管理器
+- `code/default/lib/noarch/async_http_server.py` — aiohttp 异步 HTTP 服务器
+- `code/default/lib/noarch/async_http_client.py` — httpx 异步 HTTP 客户端
+- `code/default/lib/noarch/async_socks5.py` — asyncio SOCKS5 代理
+- `code/default/lib/noarch/async_ssl_wrap.py` — asyncio SSL 连接
+- `code/default/lib/noarch/front_base/async_connect_creator.py` — async SSL 连接创建
+- `code/default/lib/tests/test_phase4_async.py` — Phase 4 异步模块测试（18 tests）
