@@ -12,3 +12,4 @@ httpx>=0.28.0
 h2>=4.0.0
 hpack>=4.0.0
 hyperframe>=6.0.0
+aiohttp>=3.9.0
