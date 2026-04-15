@@ -117,6 +117,15 @@ class TestTypeAnnotations(TestCase):
         self.assertIn('class ThreadedHTTPServer', content)
         self.assertIn('class HttpServerHandler(BaseHTTPRequestHandler)', content)
 
+    def test_connect_manager_has_type_annotations(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'front_base', 'connect_manager.py')
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('from typing import', content)
+        self.assertIn('def get_ssl_connection(self, timeout: float', content)
+        self.assertIn('def _create_ssl_connection(self, host_info: dict', content)
+        self.assertIn('def stop(self) -> None', content)
+
     def test_simple_http_server_is_shim(self):
         fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'simple_http_server.py')
         with open(fpath, 'r', encoding='utf-8') as f:
