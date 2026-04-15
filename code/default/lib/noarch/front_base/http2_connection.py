@@ -306,9 +306,12 @@ class Http2Worker(HttpWorker):
                 self.logger.warn("%s _consume_single_frame:%r, inactive time:%d", self.ip_str, e, time.time() - self.last_recv_time)
             self.close("ConnectionReset:%r" % e)
             return
+        if len(header) < 9:
+            self.close("recv.short_header:%d" % len(header))
+            return
+
         self.last_recv_time = time.time()
 
-        # Parse the header. We can use the returned memoryview directly here.
         frame, length = Frame.parse_frame_header(header)
         #self.logger.debug("h2 %s recv %s", self.ip_str, frame)
 
