@@ -168,14 +168,24 @@ class HttpServerHandler(BaseHTTPRequestHandler):
         
         return True
 
-    def unpack_reqs(self, reqs: Dict[bytes, List[bytes]]) -> Dict[str, str]:
+    def unpack_reqs(self, reqs: Dict[Union[str, bytes], List[Union[str, bytes]]]) -> Dict[str, str]:
         query: Dict[str, str] = {}
         for key, val1 in reqs.items():
-            key_str = key.decode('iso-8859-1', errors='ignore')
-            if isinstance(val1, list):
-                query[key_str] = val1[0].decode('iso-8859-1', errors='ignore')
+            if isinstance(key, bytes):
+                key_str = key.decode('iso-8859-1', errors='ignore')
             else:
-                query[key_str] = val1.decode('iso-8859-1', errors='ignore')
+                key_str = key
+            if isinstance(val1, list):
+                val0 = val1[0]
+                if isinstance(val0, bytes):
+                    query[key_str] = val0.decode('iso-8859-1', errors='ignore')
+                else:
+                    query[key_str] = val0
+            else:
+                if isinstance(val1, bytes):
+                    query[key_str] = val1.decode('iso-8859-1', errors='ignore')
+                else:
+                    query[key_str] = val1
         return query
 
     def handle_one_request(self) -> None:
@@ -414,8 +424,21 @@ class HttpServerHandler(BaseHTTPRequestHandler):
 
     def send_response_nc(self, mimetype: Union[str, bytes] = "", content: Union[str, bytes] = "",
                           headers: Union[Dict, str, bytes] = "", status: int = 200) -> None:
-        no_cache_headers = b"Cache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\n"
-        return self.send_response(mimetype, content, no_cache_headers + headers, status)
+        no_cache_headers_str = "Cache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\n"
+        if isinstance(headers, bytes):
+            combined_headers = no_cache_headers_str.encode('utf-8') + headers
+        elif isinstance(headers, str):
+            combined_headers = no_cache_headers_str + headers
+        elif isinstance(headers, dict):
+            no_cache_dict = {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+            combined_headers = {**no_cache_dict, **headers}
+        else:
+            combined_headers = no_cache_headers_str
+        return self.send_response(mimetype, content, combined_headers, status)
 
     def send_file(self, filename: str, mimetype: Union[str, bytes]) -> None:
         try:
