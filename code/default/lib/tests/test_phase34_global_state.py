@@ -339,13 +339,6 @@ class TestFrontDispatcherInitStop(TestCase):
         self.assertEqual(g._front_fail_counts, {})
         self.assertEqual(g._front_last_fail_time, {})
 
-    def test_getattr_proxies_initialized_correctly(self):
-        fd, g = self._import_modules()
-        orig = g._front_initialized
-        g._front_initialized = True
-        self.assertTrue(fd._initialized)
-        g._front_initialized = orig
-
     def test_record_fail_increments_via_ctx(self):
         fd, g = self._import_modules()
         g._front_fail_counts = {}

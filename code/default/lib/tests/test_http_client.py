@@ -1,13 +1,32 @@
 import os
+import sys
 import unittest
 import time
+import socket
+
+code_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if code_root not in sys.path:
+    sys.path.insert(0, code_root)
+lib_path = os.path.join(code_root, 'lib', 'noarch')
+if lib_path not in sys.path:
+    sys.path.insert(0, lib_path)
+
 import utils
 import json
 import http_client as simple_http_client
 import tempfile
 
 
+def _can_resolve_github():
+    try:
+        socket.getaddrinfo('raw.githubusercontent.com', 443)
+        return True
+    except socket.gaierror:
+        return False
+
+
 class HttpClientTest(unittest.TestCase):
+    @unittest.skipUnless(_can_resolve_github(), "Cannot resolve githubusercontent.com")
     def test_get(self):
         client = simple_http_client.Client(timeout=10)
         url = "https://raw.githubusercontent.com/XX-net/XX-Net/master/code/default/x_tunnel/local/cloudflare_front/front_domains.json"
@@ -17,6 +36,7 @@ class HttpClientTest(unittest.TestCase):
         data = json.loads(content)
         print(data)
 
+    @unittest.skipUnless(_can_resolve_github(), "Cannot resolve githubusercontent.com")
     def test_get2(self):
         url = "https://raw.githubusercontent.com/XX-net/XX-Net/master/code/default/update_v5.txt"
 
@@ -31,6 +51,7 @@ class HttpClientTest(unittest.TestCase):
         res = simple_http_client.request("GET", "http://127.0.0.1:2515/ping", headers=headers, timeout=0.5)
         self.assertIsNone(res)
 
+    @unittest.skipUnless(_can_resolve_github(), "Cannot resolve githubusercontent.com")
     def test_get_bulk(self):
         timeout = 5
         client = simple_http_client.Client(timeout=timeout)
