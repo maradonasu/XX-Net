@@ -12,6 +12,7 @@ if _noarch_lib not in sys.path:
 
 from . import apis
 from . import web_control
+from .context import ctx as _ctx
 
 _USE_ASYNC = os.environ.get("XXNET_ASYNC", "0") == "1"
 
@@ -22,7 +23,7 @@ else:
 
 
 def is_ready():
-    return _client_mod.ready
+    return _ctx.ready
 
 
 def start(args):

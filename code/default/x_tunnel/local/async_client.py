@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # coding:utf-8
 """
 Async X-Tunnel Client.
@@ -51,8 +51,6 @@ from . import proxy_session
 from . import front_dispatcher
 from . import config
 from . import web_control
-
-ready = False
 
 
 def create_data_path():
@@ -307,8 +305,6 @@ async def _run_socks5_server(hosts, port):
 
 
 async def _async_main(config_args):
-    global ready
-
     loop = asyncio.get_event_loop()
 
     g.xxnet_version = xxnet_version()
@@ -367,7 +363,7 @@ async def _async_main(config_args):
 
     xlog.info("Async Socks5 server listen:%s:%d.", listen_ips, bind_port)
     g.bind_port = bind_port
-    ready = True
+    g.ready = True
 
     try:
         await asyncio.Future()
@@ -381,8 +377,6 @@ async def _async_main(config_args):
 
 
 def start(args):
-    global ready
-
     async_loop.start()
     loop = async_loop.get_loop()
 
@@ -392,7 +386,7 @@ def start(args):
         asyncio.run_coroutine_threadsafe(_async_main(args), loop)
 
         for _ in range(300):
-            if ready:
+            if g.ready:
                 break
             time.sleep(0.1)
 
@@ -403,7 +397,6 @@ def start(args):
 
 
 def stop():
-    global ready
     g.running = False
 
     if hasattr(g, 'http_client') and g.http_client:
@@ -423,7 +416,7 @@ def stop():
         g.session = None
 
     async_loop.stop()
-    ready = False
+    g.ready = False
 
 
 if __name__ == '__main__':

@@ -84,6 +84,22 @@ class XTunnelContext:
 
         self.stat: XTunnelStat = XTunnelStat()
 
+        self.ready: bool = False
+
+        self.center_login_process: bool = False
+        self.openai_proxy_host: Optional[str] = None
+        self.openai_auth_str: Optional[str] = None
+        self.workable_call_times: int = 0
+
+        self.all_fronts: List[Any] = []
+        self.light_fronts: List[Any] = []
+        self.session_fronts: List[Any] = []
+        self.statistic_thread: Optional[Any] = None
+        self._front_initialized: bool = False
+        self._statistic_running: bool = False
+        self._front_fail_counts: Dict[str, int] = {}
+        self._front_last_fail_time: Dict[str, float] = {}
+
     def reset_stat(self) -> None:
         self.stat.roundtrip_num = 0
         self.stat.slow_roundtrip = 0

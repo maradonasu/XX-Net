@@ -19,9 +19,6 @@ data_xtunnel_path = os.path.join(data_path, 'x_tunnel')
 lib_path = os.path.abspath(os.path.join(current_path, os.pardir, 'common'))
 sys.path.append(lib_path)
 
-ready = False
-# don't remove, launcher web_control need it.
-
 
 def create_data_path():
     if not os.path.isdir(data_path):
@@ -45,7 +42,6 @@ from x_tunnel.local import front_dispatcher
 from x_tunnel.local import config
 
 from x_tunnel.local import web_control
-# don't remove, launcher web_control need it.
 
 
 def xxnet_version():
@@ -71,8 +67,6 @@ def get_launcher_uuid():
 
 
 def start(args):
-    global ready
-
     g.xxnet_version = xxnet_version()
     g.client_uuid = get_launcher_uuid()
     g.system = os_platform.platform + "|" + platform.version() + "|" + str(platform.architecture()) + "|" + sys.version
@@ -121,12 +115,11 @@ def start(args):
         xlog.info("Socks5 server listen:%s:%d.", g.config.socks_host, port)
         break
 
-    ready = True
+    g.ready = True
     g.socks5_server.serve_forever()
 
 
 def stop():
-    global ready
     g.running = False
     g.http_client.stop()
     front_dispatcher.stop()
@@ -140,7 +133,7 @@ def stop():
         xlog.info("Stopping session")
         g.session.stop()
         g.session = None
-    ready = False
+    g.ready = False
 
 
 if __name__ == '__main__':

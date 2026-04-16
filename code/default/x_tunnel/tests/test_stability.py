@@ -359,7 +359,7 @@ class WebControlHandlerTest(TestCase):
         self.old_openai_balance = g.openai_balance
         self.old_quota = g.quota
         self.old_quota_list = g.quota_list
-        self.old_center_login_process = proxy_session.center_login_process
+        self.old_center_login_process = g.center_login_process
 
         g.config = ConfigStub()
         g.session = SessionStub()
@@ -372,7 +372,7 @@ class WebControlHandlerTest(TestCase):
         g.openai_balance = 1
         g.quota = 2
         g.quota_list = {}
-        proxy_session.center_login_process = False
+        g.center_login_process = False
 
     def tearDown(self):
         g.config = self.old_config
@@ -386,7 +386,7 @@ class WebControlHandlerTest(TestCase):
         g.openai_balance = self.old_openai_balance
         g.quota = self.old_quota
         g.quota_list = self.old_quota_list
-        proxy_session.center_login_process = self.old_center_login_process
+        g.center_login_process = self.old_center_login_process
 
     def test_req_info_handler_force_triggers_background_refresh(self):
         handler = TestControlHandler("/info?force=1")

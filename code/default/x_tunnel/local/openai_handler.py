@@ -1,4 +1,4 @@
-﻿import random
+import random
 import json
 import base64
 import time
@@ -14,7 +14,6 @@ from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
 openai_chat_token_price = 0.000002
-host = None
 
 gzip_decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
 
@@ -29,12 +28,8 @@ def get_auth_str():
     return "Bearer " + utils.to_str(token)
 
 
-auth_str = None
-
-
 def get_openai_proxy(get_next_one=False):
-    global host
-    if get_next_one or not host:
+    if get_next_one or not g.openai_proxy_host:
 
         if not (g.config.login_account and g.config.login_password):
             return False
@@ -48,23 +43,21 @@ def get_openai_proxy(get_next_one=False):
         if not g.openai_proxies:
             return None
 
-        host = random.choice(g.openai_proxies)
-    return host
+        g.openai_proxy_host = random.choice(g.openai_proxies)
+    return g.openai_proxy_host
 
 
 def handle_openai(method, path, headers, req_body, sock):
-    global auth_str
-    if not auth_str:
-        auth_str = get_auth_str()
+    if not g.openai_auth_str:
+        g.openai_auth_str = get_auth_str()
 
     host = get_openai_proxy()
     if not host:
-        # return sock.send(b'HTTP/1.1 401 Fail\r\n\r\n')
         return 401, {}, "Service not available at current status."
 
     path = utils.to_str(path[7:])
     headers = utils.to_str(headers)
-    headers["Authorization"] = auth_str
+    headers["Authorization"] = g.openai_auth_str
     del headers["Host"]
     try:
         del headers["Accept-Encoding"]

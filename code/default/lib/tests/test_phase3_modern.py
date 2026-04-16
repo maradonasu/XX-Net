@@ -95,7 +95,7 @@ class TestTypeAnnotations(TestCase):
             content = f.read()
         self.assertIn('from __future__ import annotations', content)
         self.assertIn('from typing import', content)
-        self.assertIn('all_fronts: List[Any]', content)
+        self.assertIn('FRONT_FAIL_BASE_PENALTY: int', content)
         self.assertIn('def get_front(host: str', content)
         self.assertIn('def request(method: str', content)
 

@@ -1,4 +1,4 @@
-﻿import os
+import os
 import time
 import json
 import socket
@@ -1243,9 +1243,6 @@ def call_api(path: str, req_info: Dict[str, Any]) -> Tuple[bool, Union[str, Dict
         return False, "except:%r" % e
 
 
-center_login_process: bool = False
-
-
 def get_app_name() -> str:
     app_info_file = os.path.join(root_path, os.path.pardir, "app_info.json")
     try:
@@ -1258,7 +1255,6 @@ def get_app_name() -> str:
 
 
 def request_balance(account: Optional[str] = None, password: Optional[str] = None, is_register: bool = False, update_server: bool = True, promoter: str = "") -> Tuple[bool, str]:
-    global center_login_process
     if not g.config.api_server:
         g.server_host = str("%s:%d" % (g.config.server_host, g.config.server_port))
         xlog.info("not api_server set, use server:%s specify in config.", g.server_host)
@@ -1290,7 +1286,7 @@ def request_balance(account: Optional[str] = None, password: Optional[str] = Non
     }
 
     try:
-        center_login_process = True
+        g.center_login_process = True
         if g.tls_relay_front:
             g.tls_relay_front.set_x_tunnel_account(account, password)
         if g.seley_front:
@@ -1339,11 +1335,10 @@ def request_balance(account: Optional[str] = None, password: Optional[str] = Non
         xlog.exception("request_balance e:%r", e)
         return False, e
     finally:
-        center_login_process = False
+        g.center_login_process = False
 
 
 def jwt_login(account: str, password: str, node: str) -> Tuple[bool, str]:
-    global center_login_process
     g.server_host = str("%s:%d" % (g.config.server_host, g.config.server_port))
     xlog.info("not api_server set, use server:%s specify in config.", g.server_host)
     return True, "success"

@@ -34,7 +34,7 @@ class XTunnelSocks5Test(unittest.TestCase):
             cls._xtunnel_client = xtunnel_client
             cls._g = g
             
-            if not xtunnel_client.ready:
+            if not cls._g.ready:
                 def start_xtunnel():
                     try:
                         xtunnel_client.start({})
@@ -47,7 +47,7 @@ class XTunnelSocks5Test(unittest.TestCase):
                 
                 start_time = time.time()
                 while time.time() - start_time < cls._start_timeout:
-                    if xtunnel_client.ready:
+                    if cls._g.ready:
                         cls._xtunnel_started = True
                         break
                     time.sleep(1)

@@ -1,13 +1,10 @@
-﻿import time
+import time
 
 from . import global_var as g
 from . import front_dispatcher
 
 from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
-
-
-workable_call_times = 0
 
 
 def set_proxy(args):
@@ -20,13 +17,12 @@ def set_proxy(args):
 
 
 def is_workable():
-    global workable_call_times
-    if workable_call_times == 0:
+    if g.workable_call_times == 0:
         loop_num = 8
     else:
         loop_num = 1
 
-    workable_call_times += 1
+    g.workable_call_times += 1
     for i in range(0, loop_num):
         for front in front_dispatcher.session_fronts:
             score = front.get_dispatcher().get_score()

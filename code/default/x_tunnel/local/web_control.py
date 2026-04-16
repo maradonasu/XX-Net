@@ -217,7 +217,7 @@ class ControlHandler(http_server.HttpServerHandler):
                 "res": "logout"
             })
 
-        if proxy_session.center_login_process:
+        if g.center_login_process:
             return self.response_json({
                 "res": "login_process"
             })
