@@ -2,7 +2,7 @@ import os
 import threading
 import time
 
-import http_client as simple_http_client
+import http_client
 import utils
 from log_buffer import getLogger
 
@@ -21,7 +21,7 @@ class CheckNetwork(object):
         self.network_stat = "unknown"
         self.last_check_time = 0
         self.continue_fail_count = 0
-        self.http_client = simple_http_client.Client(timeout=self.timeout)
+        self.http_client = http_client.Client(timeout=self.timeout)
         self.rules = self._load_rules()
 
     def _load_rules(self):

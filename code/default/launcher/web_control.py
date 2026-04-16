@@ -33,7 +33,7 @@ from config import config, valid_language, app_name
 import autorun
 import update
 import update_from_github
-import http_client as simple_http_client
+import http_client
 import http_server
 import utils
 from simple_i18n import SimpleI18N
@@ -299,7 +299,7 @@ class Http_Handler(http_server.HttpServerHandler):
                 if sys_platform.platform in ["android", "ios"]:
                     try:
                         xlog.info("request http://localhost:8084/quit/")
-                        simple_http_client.request("GET", "http://localhost:8084/quit/", timeout=1)
+                        http_client.request("GET", "http://localhost:8084/quit/", timeout=1)
                     except Exception as e:
                         xlog.warn("request http://localhost:8084/quit/ e:%r", e)
                         pass
@@ -712,7 +712,7 @@ class Http_Handler(http_server.HttpServerHandler):
             }
             time.sleep(5)
         else:
-            res = simple_http_client.request("GET", "http://localhost:8084/installed_app_list/")
+            res = http_client.request("GET", "http://localhost:8084/installed_app_list/")
             data = json.loads(res.text)
             data["proxy_by_app"] = config.proxy_by_app
 
@@ -967,7 +967,7 @@ def test_proxy(type, host, port, user, passwd):
             xlog.warn("set LAN Proxy to %s:%d fail.", host, port)
             return False
 
-    client = simple_http_client.Client(proxy={
+    client = http_client.Client(proxy={
         "type": type,
         "host": host,
         "port": int(port),

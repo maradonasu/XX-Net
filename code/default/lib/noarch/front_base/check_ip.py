@@ -2,7 +2,7 @@ import socket
 import time
 
 from hyper_compat import HTTP20Connection
-import http_response_parser as simple_http_client
+from http_response_parser import Response
 import utils
 
 
@@ -20,7 +20,7 @@ class CheckIp(object):
             request_data = 'GET %s HTTP/1.1\r\nHost: %s\r\nAccept: */*\r\n\r\n' % (self.config.check_ip_path, host)
             ssl_sock.send(request_data.encode())
 
-            response = simple_http_client.Response(ssl_sock)
+            response = Response(ssl_sock)
             response.begin(timeout=5)
             return response
         except Exception as e:

@@ -191,13 +191,10 @@ class TestTypeAnnotations(TestCase):
         self.assertEqual(len(violations), 0,
                          'simple_http_server imports found in:\n' + '\n'.join(violations))
 
-    def test_simple_http_client_is_shim(self):
+    def test_simple_http_client_deleted(self):
         fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'simple_http_client.py')
-        with open(fpath, 'r', encoding='utf-8') as f:
-            content = f.read()
-        self.assertIn('Compatibility shim', content)
-        self.assertIn('from http_client import', content)
-        self.assertIn('from http_response_parser import', content)
+        self.assertFalse(os.path.exists(fpath),
+                         'simple_http_client.py shim should be deleted')
 
     def test_http_client_uses_httpx(self):
         fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'http_client.py')

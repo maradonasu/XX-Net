@@ -1,7 +1,7 @@
 from unittest import TestCase
 import json
 
-import http_client as simple_http_client
+import http_client
 
 
 class TestAPi(TestCase):
@@ -21,5 +21,5 @@ class TestAPi(TestCase):
         }
         dat = json.dumps(info)
 
-        res = simple_http_client.request("POST", url, headers=headers, body=dat)
+        res = http_client.request("POST", url, headers=headers, body=dat)
         print(res.text)

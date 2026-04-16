@@ -27,7 +27,6 @@ from hyper_compat import (
     to_host_port_tuple, to_native_string, to_bytestring
 )
 from http_response_parser import BaseResponse as _BaseResponse
-import simple_http_client
 
 from .http_common import *
 from utils import to_bytes

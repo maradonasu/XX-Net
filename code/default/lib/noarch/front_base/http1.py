@@ -2,7 +2,7 @@ from queue import Queue
 import threading
 
 from .http_common import *
-import http_response_parser as simple_http_client
+from http_response_parser import Response
 import utils
 
 
@@ -166,7 +166,7 @@ class Http1Worker(HttpWorker):
             return
 
         try:
-            response = simple_http_client.Response(self.ssl_sock)
+            response = Response(self.ssl_sock)
             response.begin(timeout=timeout)
             task.set_state("response_begin")
             self.last_recv_time = time.time()
@@ -275,7 +275,7 @@ class Http1Worker(HttpWorker):
                 self.logger.warn("h1 head send len:%r %d %s", ret, len(data), self.ip_str)
                 self.logger.warn('%s trace:%s', self.ip_str, self.get_trace())
                 return False
-            response = simple_http_client.Response(self.ssl_sock)
+            response = Response(self.ssl_sock)
             response.begin(timeout=5)
 
             status = response.status

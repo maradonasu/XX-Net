@@ -5,7 +5,7 @@ import json
 import zipfile
 import operator
 
-import http_client as simple_http_client
+import http_client
 import env_info
 import utils
 from log_buffer import getLogger, reset_log_files
@@ -82,7 +82,7 @@ def collect_debug_and_log():
     for name, url in debug_infos.items():
         # xlog.debug("fetch %s %s", name, url)
         try:
-            res = simple_http_client.request("GET", url, timeout=1)
+            res = http_client.request("GET", url, timeout=1)
             if name.endswith("log"):
                 dat = json.loads(res.text)
                 no_line = list(dat.items())

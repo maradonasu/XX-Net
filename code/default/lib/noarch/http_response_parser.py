@@ -98,7 +98,7 @@ class TxtResponse(BaseResponse):
             p = line.find(b":")
             key = line[0:p]
             value = line[p + 2:]
-            key = str(key.title())
+            key = key.title()
             self.headers[key] = value
 
         self.body = self.view[self.buffer_start:]

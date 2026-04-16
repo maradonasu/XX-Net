@@ -2,7 +2,7 @@
 # This front is for debug
 
 import time
-import http_client as simple_http_client
+import http_client
 
 from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
@@ -79,7 +79,7 @@ def request(method, host, schema="http", path="/", headers={}, data="", timeout=
 
     # xlog.debug("direct_front %s %s", method, url)
     try:
-        response = simple_http_client.request(method, url, headers, data, timeout=timeout)
+        response = http_client.request(method, url, headers, data, timeout=timeout)
         if response.status != 200:
             raise Exception("Direct request fail")
     except Exception as e:

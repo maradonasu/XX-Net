@@ -1,9 +1,9 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # coding:utf-8
 """
 Async HTTP Client using httpx.AsyncClient.
 
-Provides async request() interface compatible with simple_http_client.Client.
+Provides async request() interface compatible with http_client.Client.
 """
 
 from __future__ import annotations
