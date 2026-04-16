@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import json
 import platform
@@ -40,7 +40,7 @@ import os_platform
 from x_tunnel.local.proxy_handler import Socks5Server
 from x_tunnel.local import global_var as g
 from x_tunnel.local import proxy_session
-import simple_http_server
+import http_server
 from x_tunnel.local import front_dispatcher
 from x_tunnel.local import config
 
@@ -113,7 +113,7 @@ def start(args):
     for port in range(g.config.socks_port, g.config.socks_port + 2000):
         addresses = [(listen_ip, port) for listen_ip in listen_ips]
         try:
-            g.socks5_server = simple_http_server.HTTPServer(addresses, Socks5Server, logger=xlog)
+            g.socks5_server = http_server.HTTPServer(addresses, Socks5Server, logger=xlog)
             g.socks5_server.init_socket()
             g.bind_port = port
         except Exception:

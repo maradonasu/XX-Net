@@ -7,7 +7,7 @@ import time
 
 from urllib.parse import urlparse, parse_qs
 
-import simple_http_server
+import http_server
 from .front import front
 
 
@@ -17,7 +17,7 @@ top_path = os.path.abspath(os.path.join(root_path, os.pardir, os.pardir, os.pard
 web_ui_path = os.path.join(current_path, os.path.pardir, "web_ui")
 
 
-class ControlHandler(simple_http_server.HttpServerHandler):
+class ControlHandler(http_server.HttpServerHandler):
     def __init__(self, client_address, headers, command, path, rfile, wfile):
         self.client_address = client_address
         self.headers = headers

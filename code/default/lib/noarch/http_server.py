@@ -1,11 +1,7 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # coding:utf-8
 """
 HTTP Server using stdlib socketserver and http.server.
-
-This module provides a threading HTTP server compatible with the previous
-simple_http_server interface, allowing gradual migration without breaking
-existing code.
 """
 
 from __future__ import annotations

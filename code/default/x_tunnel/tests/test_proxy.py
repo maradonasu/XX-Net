@@ -12,7 +12,7 @@ noarch_lib = os.path.abspath(os.path.join(default_path, 'lib', 'noarch'))
 sys.path.append(noarch_lib)
 
 import utils
-import simple_http_server
+import http_server
 from dnslib.dns import DNSRecord, DNSHeader, DNSQuestion
 import socket
 

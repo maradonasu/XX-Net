@@ -163,12 +163,33 @@ class TestTypeAnnotations(TestCase):
         self.assertIn('def _create_ssl_connection(self, host_info: dict', content)
         self.assertIn('def stop(self) -> None', content)
 
-    def test_simple_http_server_is_shim(self):
+    def test_simple_http_server_deleted(self):
         fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'simple_http_server.py')
+        self.assertFalse(os.path.exists(fpath))
+
+    def test_http_server_direct_import(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'http_server.py')
         with open(fpath, 'r', encoding='utf-8') as f:
             content = f.read()
-        self.assertIn('Compatibility shim', content)
-        self.assertIn('from http_server import', content)
+        self.assertIn('class HTTPServer', content)
+        self.assertIn('class HttpServerHandler', content)
+        self.assertIn('class TestHttpServer', content)
+
+    def test_no_simple_http_server_imports_remain(self):
+        code_root = self._code_root()
+        violations = []
+        for root, dirs, files in os.walk(code_root):
+            dirs[:] = [d for d in dirs if d not in {'__pycache__', 'tests', '.git'}]
+            for fname in files:
+                if not fname.endswith('.py'):
+                    continue
+                fpath = os.path.join(root, fname)
+                with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
+                    for i, line in enumerate(f, 1):
+                        if 'simple_http_server' in line and 'test_' not in fname:
+                            violations.append('%s:%d' % (fpath, i))
+        self.assertEqual(len(violations), 0,
+                         'simple_http_server imports found in:\n' + '\n'.join(violations))
 
     def test_simple_http_client_is_shim(self):
         fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'simple_http_client.py')

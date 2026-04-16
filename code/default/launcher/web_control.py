@@ -34,7 +34,7 @@ import autorun
 import update
 import update_from_github
 import http_client as simple_http_client
-import simple_http_server
+import http_server
 import utils
 from simple_i18n import SimpleI18N
 import env_info
@@ -48,9 +48,9 @@ i18n_translator.add_translate(b"APP_VERSION", current_version)
 module_menus = {}
 
 
-class FakeHttpHandler(simple_http_server.HttpServerHandler):
+class FakeHttpHandler(http_server.HttpServerHandler):
     def handle_one_request(self):
-        # This function will replace simple_http_server HttpHandler.handle_one_request to hold all http requests.
+        # This function will replace http_server HttpHandler.handle_one_request to hold all http requests.
         # Doing this is to simulate bug.
         self.close_connection = 0
 
@@ -64,7 +64,7 @@ CORS_header = {
 }
 
 
-class Http_Handler(simple_http_server.HttpServerHandler):
+class Http_Handler(http_server.HttpServerHandler):
     deploy_proc = None
 
     def load_module_menus(self):
@@ -1028,7 +1028,7 @@ def start(allow_remote=0):
 
     xlog.info("begin to start web control:%s", addresses)
 
-    server = simple_http_server.HTTPServer(addresses, Http_Handler, logger=xlog, max_thread=2048)
+    server = http_server.HTTPServer(addresses, Http_Handler, logger=xlog, max_thread=2048)
     server.start()
 
     xlog.info("launcher web control started.")

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # coding:utf-8
 
 
@@ -15,7 +15,7 @@ import utils
 from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
-import simple_http_server
+import http_server
 from . import global_var as g
 from . import proxy_session
 from .tls_relay_front import web_control as tls_relay_web
@@ -72,7 +72,7 @@ def get_lang():
     return "en"
 
 
-class ControlHandler(simple_http_server.HttpServerHandler):
+class ControlHandler(http_server.HttpServerHandler):
     def __init__(self, client_address, headers, command, path, rfile, wfile):
         self.client_address = client_address
         self.headers = headers

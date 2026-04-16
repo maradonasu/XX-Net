@@ -13,7 +13,7 @@ noarch_lib = os.path.abspath(os.path.join(default_path, 'lib', 'noarch'))
 sys.path.append(noarch_lib)
 
 import utils
-import simple_http_server
+import http_server
 import http_client as simple_http_client
 from log_buffer import getLogger
 xlog = getLogger("test")
@@ -41,7 +41,7 @@ class ServiceTesting(object):
             except:
                 break
 
-        self.lock_server = simple_http_server.HTTPServer(('', 8888), simple_http_server.TestHttpServer, ".")
+        self.lock_server = http_server.HTTPServer(('', 8888), http_server.TestHttpServer, ".")
         self.lock_server.start()
 
         if self.check_web_console():

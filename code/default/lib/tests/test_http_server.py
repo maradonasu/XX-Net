@@ -1,12 +1,11 @@
 import unittest
 import utils
 import http_client as simple_http_client
-import simple_http_server
-
+import http_server
 
 class HttpClientTest(unittest.TestCase):
     def test_get(self):
-        server = simple_http_server.HTTPServer(('', 8880), simple_http_server.TestHttpServer, ".")
+        server = http_server.HTTPServer(('', 8880), http_server.TestHttpServer, ".")
         server.start()
 
         client = simple_http_client.Client(timeout=5)
