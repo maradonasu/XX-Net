@@ -745,3 +745,35 @@ class TestAsyncSSLWrapEndToEnd(TestCase):
                 self.skipTest("network unavailable")
 
         async_loop.run_async(do_test(), timeout=20)
+
+
+class TestAsyncDNSResolver(TestCase):
+    def test_resolver_init(self):
+        from front_base.async_dns import AsyncDNSResolver, get_resolver
+        resolver = AsyncDNSResolver()
+        self.assertIsNotNone(resolver)
+
+    def test_get_resolver_singleton(self):
+        from front_base.async_dns import get_resolver
+        r1 = get_resolver()
+        r2 = get_resolver()
+        self.assertIs(r1, r2)
+
+    def test_resolve_localhost(self):
+        from front_base.async_dns import resolve
+        import async_loop
+        async_loop.start()
+        result = async_loop.run_async(resolve("localhost"), timeout=5)
+        self.assertIsNotNone(result)
+
+
+class TestAsyncHttpDispatcher(TestCase):
+    def test_dispatcher_import(self):
+        from front_base.async_http_dispatcher import AsyncHttpsDispatcher
+        self.assertTrue(True)
+
+
+class TestAsyncIpManager(TestCase):
+    def test_import_works(self):
+        from front_base.async_ip_manager import AsyncIpManagerBase
+        self.assertTrue(True)
