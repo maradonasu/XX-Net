@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
 
 import sys_platform
-from xlog import getLogger, keep_log
+from log_buffer import getLogger, keep_log
 
 xlog = getLogger("launcher")
 import module_init
@@ -33,7 +33,7 @@ from config import config, valid_language, app_name
 import autorun
 import update
 import update_from_github
-import simple_http_client
+import http_client as simple_http_client
 import simple_http_server
 import utils
 from simple_i18n import SimpleI18N

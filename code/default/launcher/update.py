@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 
 import os, stat
@@ -14,7 +14,7 @@ from urllib.request import build_opener, HTTPSHandler, ProxyHandler
 from functools import reduce
 
 import utils
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("launcher")
 from config import config, app_name
 import update_from_github

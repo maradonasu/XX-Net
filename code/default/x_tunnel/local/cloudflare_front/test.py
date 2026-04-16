@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 
 import os
@@ -31,7 +31,7 @@ elif sys.platform == "darwin":
 import x_tunnel.local.cloudflare_front as front
 import env_info
 
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("cloudflare_front")
 xlog.set_buffer(2000)
 

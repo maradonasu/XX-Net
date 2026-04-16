@@ -1,7 +1,7 @@
-import os
+﻿import os
 
-import xlog
-logger = xlog.getLogger("cloudfront_front")
+import log_buffer
+logger = log_buffer.getLogger("cloudfront_front")
 logger.set_buffer(500)
 
 from front_base.openssl_wrap import SSLContext
@@ -40,7 +40,7 @@ class Front(object):
         ca_certs = os.path.join(current_path, "cacert.pem")
         openssl_context = SSLContext(logger, ca_certs=ca_certs, support_http2=True)
         self.connect_creator = ConnectCreator(logger, self.config, openssl_context, self.host_manager)
-        self.ip_checker = CheckIp(xlog.null, self.config, self.connect_creator)
+        self.ip_checker = CheckIp(log_buffer.null, self.config, self.connect_creator)
 
         ip_source = Ipv4RangeSource(
             logger, self.config,

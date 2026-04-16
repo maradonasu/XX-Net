@@ -1,8 +1,8 @@
-
+﻿
 import sys
 import os
 
-from xlog import getLogger
+from log_buffer import getLogger
 
 xlog = getLogger("launcher")
 

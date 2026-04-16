@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 """
 Async SSL Connection using asyncio.open_connection(ssl=...).
@@ -13,7 +13,7 @@ import asyncio
 import ssl
 from typing import Any, Callable, Optional, Tuple, Union
 
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("async_ssl")
 
 import async_loop

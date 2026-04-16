@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 
 import os
@@ -29,7 +29,7 @@ elif sys.platform == "darwin":
     sys.path.append(extra_lib)
 
 import tls_relay_front as tls_relay
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("tls_relay")
 import env_info
 

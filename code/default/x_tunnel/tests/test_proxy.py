@@ -16,8 +16,8 @@ import simple_http_server
 from dnslib.dns import DNSRecord, DNSHeader, DNSQuestion
 import socket
 
-import simple_http_client
-from xlog import getLogger
+import http_client as simple_http_client
+from log_buffer import getLogger
 xlog = getLogger("test")
 
 

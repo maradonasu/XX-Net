@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 
 # Copyright (c) 2014 clowwindy
 #
@@ -23,7 +23,7 @@
 
 
 import sys
-import xlog
+import log_buffer
 
 __all__ = ['ciphers']
 

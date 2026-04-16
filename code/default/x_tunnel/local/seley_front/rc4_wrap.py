@@ -1,4 +1,4 @@
-import socket
+﻿import socket
 import time
 import struct
 import json
@@ -6,11 +6,11 @@ import os
 import errno
 
 import env_info
-import xlog
+import log_buffer
 data_path = env_info.data_path
 module_data_path = os.path.join(data_path, 'x_tunnel')
 
-logger = xlog.getLogger("seley_front", log_path=module_data_path, save_start_log=1500, save_warning_log=True)
+logger = log_buffer.getLogger("seley_front", log_path=module_data_path, save_start_log=1500, save_warning_log=True)
 logger.set_buffer(300)
 
 try:

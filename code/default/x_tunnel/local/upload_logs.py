@@ -5,10 +5,10 @@ import json
 import zipfile
 import operator
 
-import simple_http_client
+import http_client as simple_http_client
 import env_info
 import utils
-from xlog import getLogger, reset_log_files
+from log_buffer import getLogger, reset_log_files
 xlog = getLogger("x_tunnel")
 
 from x_tunnel.local import global_var as g

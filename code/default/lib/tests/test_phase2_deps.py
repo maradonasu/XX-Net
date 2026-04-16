@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import os
 import importlib
 import subprocess
@@ -102,53 +102,57 @@ class TestPipImportsWork(TestCase):
         self.assertTrue(callable(FlowControlManager))
 
 
-class TestXlogStdlibLogging(TestCase):
-    """Phase 2.2.1-2.2.5: Verify xlog uses stdlib logging internally."""
+class TestLogBufferStdlibLogging(TestCase):
+    """Phase 2.2.1-2.2.5: Verify log_buffer uses stdlib logging."""
 
     def _code_root(self):
         return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-    def test_xlog_imports_logging(self):
+    def test_xlog_deleted(self):
         fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'xlog.py')
+        self.assertFalse(os.path.isfile(fpath), 'xlog.py should be deleted')
+
+    def test_log_buffer_imports_logging(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'log_buffer.py')
         with open(fpath, 'r', encoding='utf-8') as f:
             content = f.read()
         self.assertIn('import logging', content,
-                      'xlog.py should import stdlib logging')
+                      'log_buffer.py should import stdlib logging')
 
-    def test_xlog_getLogger_returns_logger(self):
-        from xlog import getLogger
-        logger = getLogger("test_phase2")
+    def test_log_buffer_getLogger_returns_logger(self):
+        from log_buffer import getLogger
+        logger = getLogger("test_phase2_lb")
         self.assertTrue(hasattr(logger, 'debug'))
         self.assertTrue(hasattr(logger, 'info'))
         self.assertTrue(hasattr(logger, 'warn'))
         self.assertTrue(hasattr(logger, 'error'))
         self.assertTrue(hasattr(logger, 'exception'))
 
-    def test_xlog_log_levels(self):
-        from xlog import getLogger
-        logger = getLogger("test_phase2_levels", buffer_size=10)
+    def test_log_buffer_log_levels(self):
+        from log_buffer import getLogger
+        logger = getLogger("test_phase2_lb_levels", buffer_size=10)
         logger.info("test info message")
         logger.warn("test warn message")
         logger.error("test error message")
         logger.debug("test debug message")
         self.assertTrue(len(logger.buffer) >= 4)
 
-    def test_xlog_buffer_works(self):
-        from xlog import getLogger
-        logger = getLogger("test_phase2_buffer", buffer_size=5)
+    def test_log_buffer_buffer_works(self):
+        from log_buffer import getLogger
+        logger = getLogger("test_phase2_lb_buf", buffer_size=5)
         for i in range(10):
             logger.info("msg %d", i)
         self.assertTrue(len(logger.buffer) <= 5)
 
-    def test_xlog_setLevel(self):
-        from xlog import getLogger
-        logger = getLogger("test_phase2_level")
+    def test_log_buffer_setLevel(self):
+        from log_buffer import getLogger
+        logger = getLogger("test_phase2_lb_level")
         logger.setLevel("ERROR")
         self.assertEqual(logger.min_level, 40)
 
-    def test_xlog_get_last_lines(self):
-        from xlog import getLogger
-        logger = getLogger("test_phase2_lastlines", buffer_size=100)
+    def test_log_buffer_get_last_lines(self):
+        from log_buffer import getLogger
+        logger = getLogger("test_phase2_lb_lines", buffer_size=100)
         logger.info("line1")
         logger.info("line2")
         lines = logger.get_last_lines(2)
@@ -156,28 +160,32 @@ class TestXlogStdlibLogging(TestCase):
         self.assertEqual(len(data), 2)
 
 
-class TestXconfigNoXlogImport(TestCase):
-    """Phase 2.2.6-2.2.9: Verify xconfig no longer imports xlog."""
+class TestConfigManager(TestCase):
+    """Phase 2.2.6-2.2.9: Verify config_manager works."""
 
     def _code_root(self):
         return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-    def test_xconfig_no_xlog_import(self):
+    def test_xconfig_deleted(self):
         fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'xconfig.py')
+        self.assertFalse(os.path.isfile(fpath), 'xconfig.py should be deleted')
+
+    def test_config_manager_imports_logging(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'config_manager.py')
         with open(fpath, 'r', encoding='utf-8') as f:
             content = f.read()
-        self.assertNotIn('import xlog', content,
-                         'xconfig.py should not import xlog')
         self.assertIn('import logging', content,
-                      'xconfig.py should use stdlib logging')
+                      'config_manager.py should import stdlib logging')
+        self.assertNotIn('import xlog', content,
+                         'config_manager.py should not import xlog')
 
-    def test_xconfig_works(self):
-        import xconfig
+    def test_config_manager_works(self):
+        import config_manager
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             f.write('{}')
             path = f.name
         try:
-            config = xconfig.Config(path)
+            config = config_manager.Config(path)
             config.set_var("test_key", "test_value")
             config.load()
             self.assertEqual(config.test_key, "test_value")

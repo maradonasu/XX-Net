@@ -1,4 +1,4 @@
-
+﻿
 #!/usr/bin/env python3
 # coding:utf-8
 
@@ -7,7 +7,7 @@ import sys
 
 import utils
 from config import get_language
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("launcher")
 
 

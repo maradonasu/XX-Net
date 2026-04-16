@@ -1,10 +1,10 @@
-import os
+﻿import os
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 root_path = os.path.abspath(os.path.join(current_path, os.pardir, os.pardir, os.pardir))
 
 import env_info
-import xlog
+import log_buffer
 
 from front_base.http_dispatcher import HttpsDispatcher
 from front_base.connect_manager import ConnectManager
@@ -16,7 +16,7 @@ from .. import check_local_network
 data_path = env_info.data_path
 module_data_path = os.path.join(data_path, 'x_tunnel')
 
-logger = xlog.getLogger("seley_front", log_path=module_data_path, save_start_log=1500, save_warning_log=True)
+logger = log_buffer.getLogger("seley_front", log_path=module_data_path, save_start_log=1500, save_warning_log=True)
 logger.set_buffer(300)
 
 from .ip_manager import IpManager

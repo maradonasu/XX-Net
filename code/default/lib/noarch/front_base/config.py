@@ -1,5 +1,5 @@
-
-import xconfig
+﻿
+import config_manager as xconfig
 
 
 class ConfigBase(xconfig.Config):

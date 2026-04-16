@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 
 
@@ -20,7 +20,7 @@ import module_init
 import update
 from config import config, app_name
 
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("launcher")
 from systray import SysTrayIcon, win32_adapter
 

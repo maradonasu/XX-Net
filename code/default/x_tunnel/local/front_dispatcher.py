@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import time
 import threading
@@ -23,7 +23,7 @@ FRONT_PENALTY_DECAY_SECONDS: int = 30
 
 from . import global_var as g
 import utils
-from xlog import getLogger
+from log_buffer import getLogger
 import env_info
 
 current_path = os.path.dirname(os.path.abspath(__file__))

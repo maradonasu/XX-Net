@@ -1,7 +1,7 @@
 from unittest import TestCase
 import json
 
-import simple_http_client
+import http_client as simple_http_client
 
 
 class TestAPi(TestCase):

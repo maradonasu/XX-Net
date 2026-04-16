@@ -1,6 +1,6 @@
 import unittest
 import utils
-import simple_http_client
+import http_client as simple_http_client
 import simple_http_server
 
 

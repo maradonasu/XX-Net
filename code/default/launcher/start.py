@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 
 import platform
@@ -38,7 +38,7 @@ def create_data_path():
 
 create_data_path()
 
-from xlog import getLogger
+from log_buffer import getLogger
 log_file = os.path.join(data_launcher_path, "launcher.log")
 xlog = getLogger("launcher", log_path=data_launcher_path, save_start_log=500, save_warning_log=True)
 xlog.set_buffer(100)

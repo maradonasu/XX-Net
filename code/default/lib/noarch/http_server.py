@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 """
 HTTP Server using stdlib socketserver and http.server.
@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse, parse_qs
 
 import utils
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("http_server")
 
 

@@ -3,7 +3,7 @@ import unittest
 import time
 import utils
 import json
-import simple_http_client
+import http_client as simple_http_client
 import tempfile
 
 

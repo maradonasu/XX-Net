@@ -132,3 +132,29 @@ class TestTypeAnnotations(TestCase):
             content = f.read()
         self.assertIn('Compatibility shim', content)
         self.assertIn('from http_server import', content)
+
+    def test_simple_http_client_is_shim(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'simple_http_client.py')
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('Compatibility shim', content)
+        self.assertIn('from http_client import', content)
+        self.assertIn('from http_response_parser import', content)
+
+    def test_http_client_uses_httpx(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'http_client.py')
+        self.assertTrue(os.path.exists(fpath))
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('import httpx', content)
+        self.assertIn('class Client', content)
+        self.assertIn('httpx.Client(', content)
+
+    def test_http_response_parser_exists(self):
+        fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'http_response_parser.py')
+        self.assertTrue(os.path.exists(fpath))
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('class Response', content)
+        self.assertIn('class TxtResponse', content)
+        self.assertIn('class BaseResponse', content)

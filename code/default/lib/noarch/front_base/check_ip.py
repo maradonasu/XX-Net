@@ -2,7 +2,7 @@ import socket
 import time
 
 from hyper_compat import HTTP20Connection
-import simple_http_client
+import http_response_parser as simple_http_client
 import utils
 
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 # Contributor:
 #      Phus Lu        <phus.lu@gmail.com>
@@ -7,7 +7,7 @@ import sys
 import webbrowser
 
 from config import config, app_name
-from xlog import getLogger
+from log_buffer import getLogger
 
 xlog = getLogger("launcher")
 current_path = os.path.dirname(os.path.abspath(__file__))

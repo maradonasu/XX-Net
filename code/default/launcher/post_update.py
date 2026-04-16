@@ -1,11 +1,11 @@
-import os
+﻿import os
 import shutil
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 root_path = os.path.abspath(os.path.join(current_path, os.pardir))
 top_path = os.path.abspath(os.path.join(root_path, os.pardir, os.pardir))
 
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("launcher")
 from config import config
 

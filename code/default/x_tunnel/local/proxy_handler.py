@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Tuple, Union
 from urllib.parse import urlparse
 
 import utils
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
 from . import global_var as g

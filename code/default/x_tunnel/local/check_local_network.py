@@ -2,9 +2,9 @@ import os
 import threading
 import time
 
-import simple_http_client
+import http_client as simple_http_client
 import utils
-from xlog import getLogger
+from log_buffer import getLogger
 
 xlog = getLogger("x_tunnel")
 

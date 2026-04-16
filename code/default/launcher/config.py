@@ -6,9 +6,9 @@ import locale
 import json
 
 import sys_platform
-from simple_http_client import request
-import xconfig
-from xlog import getLogger
+from http_client import request
+import config_manager as xconfig
+from log_buffer import getLogger
 xlog = getLogger("launcher")
 
 current_path = os.path.dirname(os.path.abspath(__file__))

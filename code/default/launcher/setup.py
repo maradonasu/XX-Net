@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 
 from config import config
@@ -13,7 +13,7 @@ import zipfile
 from urllib.request import build_opener, ProxyHandler
 
 import env_info
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("launcher")
 
 current_path = os.path.dirname(os.path.abspath(__file__))

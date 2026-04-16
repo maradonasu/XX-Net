@@ -1,4 +1,4 @@
-import random
+﻿import random
 import json
 import base64
 import time
@@ -10,7 +10,7 @@ from . import global_var as g
 from . import front_dispatcher
 from . import proxy_session
 
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
 openai_chat_token_price = 0.000002

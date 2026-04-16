@@ -1,4 +1,4 @@
-import time
+﻿import time
 import os
 import json
 import socket
@@ -6,7 +6,7 @@ import threading
 
 from front_base.ip_manager import IpManagerBase
 import utils
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("seley_front")
 
 

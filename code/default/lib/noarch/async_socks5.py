@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 """
 Async SOCKS5 Proxy Handler using asyncio streams.
@@ -13,7 +13,7 @@ import asyncio
 import struct
 from typing import Optional, Tuple
 
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("async_socks5")
 
 import async_loop

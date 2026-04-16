@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 
 import os
@@ -22,7 +22,7 @@ import module_init
 import subprocess
 import webbrowser
 
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("launcher")
 
 import AppKit

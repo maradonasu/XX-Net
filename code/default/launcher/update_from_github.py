@@ -20,9 +20,9 @@ noarch_lib = os.path.join(python_path, 'lib', 'noarch')
 sys.path.append(noarch_lib)
 
 import utils
-import simple_http_client
+import http_client as simple_http_client
 import global_var
-from xlog import getLogger
+from log_buffer import getLogger
 
 xlog = getLogger("launcher")
 try:

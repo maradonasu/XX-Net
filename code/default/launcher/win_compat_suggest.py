@@ -1,4 +1,4 @@
-# coding:utf-8
+﻿# coding:utf-8
 import json
 import os
 import ctypes
@@ -9,7 +9,7 @@ import subprocess
 import env_info
 from launcher.config import get_language
 from config import app_name, config
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("launcher")
 
 current_path = os.path.dirname(os.path.abspath(__file__))

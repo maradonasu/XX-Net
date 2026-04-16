@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 
 
@@ -12,7 +12,7 @@ import json
 import base64
 
 import utils
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
 import simple_http_server

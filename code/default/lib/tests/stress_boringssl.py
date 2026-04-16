@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import os
 
 current_path = os.path.dirname(os.path.abspath(__file__))
@@ -25,8 +25,8 @@ elif sys.platform == "darwin":
     sys.path.append(extra_lib)
 
 import env_info
-import xlog
-logger = xlog.getLogger("stress")
+import log_buffer
+logger = log_buffer.getLogger("stress")
 
 from front_base.openssl_wrap import SSLContext
 from front_base.connect_creator import ConnectCreator

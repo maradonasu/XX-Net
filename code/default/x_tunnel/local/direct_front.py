@@ -2,9 +2,9 @@
 # This front is for debug
 
 import time
-import simple_http_client
+import http_client as simple_http_client
 
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
 name = "direct_front"

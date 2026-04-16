@@ -1,12 +1,12 @@
-import sys
+﻿import sys
 import os
 
 import env_info
 data_path = env_info.data_path
 data_xtunnel_path = os.path.join(data_path, 'x_tunnel')
 
-import xconfig
-from xlog import getLogger
+import config_manager as xconfig
+from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
 

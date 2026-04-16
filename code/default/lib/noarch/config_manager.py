@@ -1,13 +1,21 @@
+#!/usr/bin/env python3
+# coding:utf-8
+"""
+JSON-file backed configuration manager.
 
-import time
+Replaces the former xconfig.py.  Uses stdlib logging.
+Maintains the same ``set_var / load / save`` API for backward compatibility.
+"""
+
 import json
 import os
+import time
 import logging
 
-_logger = logging.getLogger('xlog.xconfig')
+_logger = logging.getLogger('config_manager')
 
 
-class Config(object):
+class Config:
     def __init__(self, config_path):
         self.last_load_time = time.time()
         self.default_config = {}
@@ -19,9 +27,12 @@ class Config(object):
         pass
 
     def check_change(self):
-        if os.path.getmtime(self.config_path) > self.last_load_time:
-            self.load()
-            _logger.info("reload config %s", self.config_path)
+        try:
+            if os.path.getmtime(self.config_path) > self.last_load_time:
+                self.load()
+                _logger.info("reload config %s", self.config_path)
+        except OSError:
+            pass
 
     def load(self):
         self.last_load_time = time.time()
@@ -35,7 +46,7 @@ class Config(object):
                 try:
                     self.file_config = json.loads(content)
                 except Exception as e:
-                    _logger.warn("Loading config:%s content:%s fail:%r", self.config_path, content, e)
+                    _logger.warning("Loading config:%s content:%s fail:%r", self.config_path, content, e)
                     self.file_config = {}
 
         for var_name in self.default_config:

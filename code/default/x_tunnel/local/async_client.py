@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 """
 Async X-Tunnel Client.
@@ -37,7 +37,7 @@ data_xtunnel_path = os.path.join(data_path, 'x_tunnel')
 lib_path = os.path.abspath(os.path.join(current_path, os.pardir, 'common'))
 sys.path.append(lib_path)
 
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("x_tunnel", log_path=data_xtunnel_path, save_start_log=1500, save_warning_log=True)
 
 import os_platform

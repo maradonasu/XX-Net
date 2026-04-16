@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 
 import os
@@ -30,7 +30,7 @@ elif sys.platform == "darwin":
 
 import env_info
 from .front import front
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("cloudfront_front")
 xlog.set_buffer(2000)
 

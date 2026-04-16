@@ -1,9 +1,9 @@
-import time
+﻿import time
 
 from . import global_var as g
 from . import front_dispatcher
 
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
 

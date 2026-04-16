@@ -3,7 +3,7 @@ import time
 import random
 
 from queue import Queue
-import simple_http_client
+from http_response_parser import BaseResponse
 
 import utils
 
@@ -177,7 +177,7 @@ class Task(object):
         self.responsed = True
         err_text = "response_fail:%s" % reason
         self.logger.warn("%s %s", self.url, err_text)
-        res = simple_http_client.BaseResponse(body=err_text)
+        res = BaseResponse(body=err_text)
         res.task = self
         res.worker = self.worker
         if self.queue:

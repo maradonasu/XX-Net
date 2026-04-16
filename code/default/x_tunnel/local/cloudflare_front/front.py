@@ -1,10 +1,10 @@
-import os
+﻿import os
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 root_path = os.path.abspath(os.path.join(current_path, os.pardir, os.pardir, os.pardir))
 
 import env_info
-import xlog
+import log_buffer
 
 from .config import Config
 from . import ip_manager
@@ -20,7 +20,7 @@ from .. import check_local_network
 data_path = env_info.data_path
 module_data_path = os.path.join(data_path, 'x_tunnel')
 
-logger = xlog.getLogger("cloudflare_front", log_path=module_data_path, save_start_log=1500, save_warning_log=True)
+logger = log_buffer.getLogger("cloudflare_front", log_path=module_data_path, save_start_log=1500, save_warning_log=True)
 logger.set_buffer(300)
 
 
@@ -50,7 +50,7 @@ class Front(object):
 
         openssl_context = SSLContext(logger, ca_certs=ca_certs)
         self.connect_creator = ConnectCreator(logger, self.config, openssl_context, None)
-        self.check_ip = CheckIp(xlog.null, self.config, self.connect_creator)
+        self.check_ip = CheckIp(log_buffer.null, self.config, self.connect_creator)
 
         self.ipv4_source = Ipv4RangeSource(
             logger, self.config,

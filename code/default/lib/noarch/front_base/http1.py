@@ -2,7 +2,7 @@ from queue import Queue
 import threading
 
 from .http_common import *
-import simple_http_client
+import http_response_parser as simple_http_client
 import utils
 
 
@@ -234,9 +234,13 @@ class Http1Worker(HttpWorker):
 
         time_now = time.time()
         time_cost = (time_now - start_time)
-        xcost = float(response.headers.get(b"X-Cost", -1))
-        if isinstance(xcost, list):
-            xcost = float(xcost[0])
+        xcost_raw = response.headers.get(b"X-Cost", -1)
+        if isinstance(xcost_raw, (bytes, bytearray)):
+            xcost = float(xcost_raw)
+        elif isinstance(xcost_raw, list):
+            xcost = float(xcost_raw[0])
+        else:
+            xcost = float(xcost_raw)
 
         road_time = time_cost - xcost
         if xcost != -1 and road_time > 0:

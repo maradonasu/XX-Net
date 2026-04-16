@@ -1,11 +1,11 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """A simple crossplatform autostart helper"""
 
 import os
 import sys
 
 from config import app_name
-from xlog import getLogger
+from log_buffer import getLogger
 
 xlog = getLogger("launcher")
 

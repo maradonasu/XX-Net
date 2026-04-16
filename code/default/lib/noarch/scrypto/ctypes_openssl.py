@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 
 # Copyright (c) 2014 clowwindy
 #
@@ -22,7 +22,7 @@
 
 
 
-import xlog
+import log_buffer
 from ctypes import CDLL, c_char_p, c_int, c_long, byref,\
     create_string_buffer, c_void_p
 

@@ -26,6 +26,7 @@ from hyper_compat import (
     h2_safe_headers, strip_headers,
     to_host_port_tuple, to_native_string, to_bytestring
 )
+from http_response_parser import BaseResponse as _BaseResponse
 import simple_http_client
 
 from .http_common import *
@@ -295,7 +296,9 @@ class Stream(object):
             self.get_head_stream_num = len(self.connection.streams)
 
             length = self.response_headers.get("Content-Length", None)
-            if isinstance(length, list):
+            if isinstance(length, (bytes, bytearray)):
+                length = int(length)
+            elif isinstance(length, list):
                 length = int(length[0])
             if not self.task.finished:
                 self.task.content_length = length
@@ -304,7 +307,9 @@ class Stream(object):
 
         if 'END_STREAM' in frame.flags:
             xcost = self.response_headers.get("X-Cost", -1)
-            if isinstance(xcost, list):
+            if isinstance(xcost, (bytes, bytearray)):
+                xcost = float(xcost)
+            elif isinstance(xcost, list):
                 xcost = float(xcost[0])
 
             time_now = time.time()
@@ -343,7 +348,7 @@ class Stream(object):
         self.task.responsed = True
         status = int(self.response_headers[b':status'][0])
         strip_headers(self.response_headers)
-        response = simple_http_client.BaseResponse(status=status, headers=self.response_headers)
+        response = _BaseResponse(status=status, headers=self.response_headers)
         response.ssl_sock = self.connection.ssl_sock
         response.worker = self.connection
         response.task = self.task

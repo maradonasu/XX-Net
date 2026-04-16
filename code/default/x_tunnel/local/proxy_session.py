@@ -1,4 +1,4 @@
-import os
+﻿import os
 import time
 import json
 import socket
@@ -7,7 +7,7 @@ import xstruct as struct
 import hashlib
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from xlog import getLogger, keep_log
+from log_buffer import getLogger, keep_log
 xlog = getLogger("x_tunnel")
 
 import utils

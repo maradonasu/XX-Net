@@ -17,7 +17,7 @@ sys.path.insert(0, noarch_lib)
 sys.path.insert(0, default_path)
 
 try:
-    import simple_http_client
+    import http_client as simple_http_client
 except ImportError:
     simple_http_client = None
 

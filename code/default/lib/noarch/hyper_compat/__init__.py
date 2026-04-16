@@ -67,23 +67,37 @@ class StreamResetError(Exception):
 
 
 class HTTPHeaderMap(dict):
+    @staticmethod
+    def _norm_key(key):
+        if isinstance(key, bytes):
+            key = key.decode('utf-8')
+        return key.lower()
+
+    @staticmethod
+    def _norm_value(value):
+        if isinstance(value, str):
+            return value.encode('utf-8')
+        return value
+
+    def __init__(self, mapping=None, **kwargs):
+        super().__init__()
+        if mapping:
+            for k, v in mapping.items():
+                self[k] = v
+        for k, v in kwargs.items():
+            self[k] = v
+
     def __getitem__(self, key):
-        key = key.lower() if isinstance(key, str) else key
-        return super().__getitem__(key)
+        return super().__getitem__(self._norm_key(key))
     
     def __setitem__(self, key, value):
-        key = key.lower() if isinstance(key, str) else key
-        if isinstance(value, str):
-            value = value.encode('utf-8')
-        super().__setitem__(key, value)
+        super().__setitem__(self._norm_key(key), self._norm_value(value))
     
     def __contains__(self, key):
-        key = key.lower() if isinstance(key, str) else key
-        return super().__contains__(key)
+        return super().__contains__(self._norm_key(key))
     
     def get(self, key, default=None):
-        key = key.lower() if isinstance(key, str) else key
-        return super().get(key, default)
+        return super().get(self._norm_key(key), default)
 
 
 class BlockedFrame(Frame):

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import sys
@@ -88,7 +88,7 @@ class _SelectorWrapper(selectors.DefaultSelector):
             except KeyError:
                 pass
 
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
 _stop_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="conn_stop")

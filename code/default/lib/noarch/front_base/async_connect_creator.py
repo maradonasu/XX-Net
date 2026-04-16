@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 """
 Async Connect Creator using asyncio SSL connections.
@@ -12,7 +12,7 @@ import ssl
 from typing import Any, Callable, Optional
 
 import async_ssl_wrap
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("async_connect_creator")
 
 

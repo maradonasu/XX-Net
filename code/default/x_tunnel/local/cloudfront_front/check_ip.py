@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 
 import sys
@@ -29,8 +29,8 @@ elif sys.platform == "darwin":
 
 import env_info
 import utils
-import xlog
-logger = xlog.getLogger("cloudfront_front")
+import log_buffer
+logger = log_buffer.getLogger("cloudfront_front")
 logger.set_buffer(500)
 
 from front_base.openssl_wrap import SSLContext

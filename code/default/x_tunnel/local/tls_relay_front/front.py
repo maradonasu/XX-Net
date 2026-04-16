@@ -1,8 +1,8 @@
-import os
+﻿import os
 current_path = os.path.dirname(os.path.abspath(__file__))
 root_path = os.path.abspath(os.path.join(current_path, os.pardir, os.pardir, os.pardir))
 
-import xlog
+import log_buffer
 import env_info
 
 from .config import Config
@@ -19,7 +19,7 @@ current_path = os.path.dirname(os.path.abspath(__file__))
 data_path = env_info.data_path
 module_data_path = os.path.join(data_path, 'x_tunnel')
 
-logger = xlog.getLogger("tls_relay", log_path=module_data_path, save_start_log=1500, save_warning_log=True)
+logger = log_buffer.getLogger("tls_relay", log_path=module_data_path, save_start_log=1500, save_warning_log=True)
 logger.set_buffer(100)
 
 

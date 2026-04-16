@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # coding:utf-8
 """
 Async HTTP Client using httpx.AsyncClient.
@@ -12,7 +12,7 @@ import asyncio
 from typing import Any, Dict, Optional, Union
 
 import httpx
-from xlog import getLogger
+from log_buffer import getLogger
 xlog = getLogger("async_http_client")
 
 import async_loop
