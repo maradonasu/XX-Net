@@ -106,6 +106,43 @@ class TestTypeAnnotations(TestCase):
             content = f.read()
         self.assertIn('class XTunnelContext', content)
         self.assertIn('def is_running(self) -> bool', content)
+        self.assertIn('class _GlobalVarProxy', content)
+        self.assertIn('ctx: _GlobalVarProxy', content)
+        self.assertIn('_context: XTunnelContext', content)
+
+    def test_global_var_is_shim(self):
+        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'global_var.py')
+        self.assertTrue(os.path.exists(fpath))
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('from .context import ctx', content)
+        self.assertIn('sys.modules[__name__] = ctx', content)
+
+    def test_ctx_and_g_share_same_context(self):
+        import sys
+        code_root = self._code_root()
+        if code_root not in sys.path:
+            sys.path.insert(0, code_root)
+        lib_path = os.path.join(code_root, 'lib', 'noarch')
+        if lib_path not in sys.path:
+            sys.path.insert(0, lib_path)
+
+        from x_tunnel.local.context import ctx, _context
+        from x_tunnel.local import global_var as g
+
+        g.test_di_attr = 'via_g'
+        self.assertEqual(ctx.test_di_attr, 'via_g')
+        self.assertEqual(_context.test_di_attr, 'via_g')
+
+        ctx.test_di_attr2 = 'via_ctx'
+        self.assertEqual(g.test_di_attr2, 'via_ctx')
+        self.assertEqual(_context.test_di_attr2, 'via_ctx')
+
+        self.assertIs(g._ctx, _context)
+        self.assertIs(ctx._ctx, _context)
+
+        del _context.test_di_attr
+        del _context.test_di_attr2
 
     def test_http_server_uses_stdlib(self):
         fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'http_server.py')

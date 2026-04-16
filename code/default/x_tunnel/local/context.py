@@ -4,12 +4,20 @@
 XTunnelContext - Encapsulated global state for X-Tunnel module.
 
 All module-level globals from the former global_var.py are now
-attributes of a single XTunnelContext instance.  The global_var
-module re-exports this instance for backward compatibility.
+attributes of a single XTunnelContext instance.
+
+Usage::
+
+    from .context import ctx          # preferred (new code)
+    from . import global_var as g     # backward-compatible (existing code)
+
+Both ``ctx`` and ``g`` resolve to the same proxy, which delegates
+every attribute access to the underlying XTunnelContext singleton.
 """
 
 from __future__ import annotations
 
+import sys
 from typing import Any, Dict, List, Optional
 
 
@@ -84,3 +92,21 @@ class XTunnelContext:
 
     def is_running(self) -> bool:
         return self.running
+
+
+class _GlobalVarProxy:
+    def __init__(self, ctx: XTunnelContext) -> None:
+        self.__dict__['_ctx'] = ctx
+
+    def __getattr__(self, name: str):
+        return getattr(self._ctx, name)
+
+    def __setattr__(self, name: str, value) -> None:
+        setattr(self._ctx, name, value)
+
+    def __delattr__(self, name: str) -> None:
+        delattr(self._ctx, name)
+
+
+_context: XTunnelContext = XTunnelContext()
+ctx: _GlobalVarProxy = _GlobalVarProxy(_context)
