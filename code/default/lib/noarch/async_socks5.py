@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # coding:utf-8
 """
 Async SOCKS5 Proxy Handler using asyncio streams.
@@ -10,8 +10,9 @@ asyncio-based implementation for better concurrency.
 from __future__ import annotations
 
 import asyncio
+import socket
 import struct
-from typing import Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 from log_buffer import getLogger
 xlog = getLogger("async_socks5")
@@ -21,7 +22,7 @@ import async_loop
 
 class AsyncSocks5Handler:
     def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
-                 session_factory: Any = None) -> None:
+                 session_factory: Optional[Callable[[], Any]] = None) -> None:
         self.reader = reader
         self.writer = writer
         self.session_factory = session_factory
@@ -52,38 +53,54 @@ class AsyncSocks5Handler:
                 pass
 
     async def _handle_socks5(self) -> None:
-        auth_methods = await self.reader.read(1)
-        if not auth_methods:
+        try:
+            auth_methods = await asyncio.wait_for(self.reader.readexactly(1), timeout=10)
+        except (asyncio.IncompleteReadError, asyncio.TimeoutError):
             return
 
         num_methods = auth_methods[0]
-        methods = await self.reader.read(num_methods)
+        if num_methods > 0:
+            try:
+                await asyncio.wait_for(self.reader.readexactly(num_methods), timeout=10)
+            except (asyncio.IncompleteReadError, asyncio.TimeoutError):
+                return
 
         self.writer.write(b"\x05\x00")
         await self.writer.drain()
 
-        header = await self.reader.read(4)
-        if len(header) < 4 or header[0] != 5:
+        try:
+            header = await asyncio.wait_for(self.reader.readexactly(4), timeout=10)
+        except (asyncio.IncompleteReadError, asyncio.TimeoutError):
+            return
+
+        if header[0] != 5:
             return
 
         cmd = header[1]
         atyp = header[3]
 
-        if atyp == 1:
-            addr_bytes = await self.reader.read(4)
-            target_host = ".".join(str(b) for b in addr_bytes)
-        elif atyp == 3:
-            addr_len = await self.reader.read(1)
-            addr_bytes = await self.reader.read(addr_len[0])
-            target_host = addr_bytes.decode()
-        elif atyp == 4:
-            addr_bytes = await self.reader.read(16)
-            import socket
-            target_host = socket.inet_ntop(socket.AF_INET6, addr_bytes)
-        else:
+        try:
+            if atyp == 1:
+                addr_bytes = await asyncio.wait_for(self.reader.readexactly(4), timeout=10)
+                target_host = ".".join(str(b) for b in addr_bytes)
+            elif atyp == 3:
+                addr_len_byte = await asyncio.wait_for(self.reader.readexactly(1), timeout=10)
+                addr_len = addr_len_byte[0]
+                addr_bytes = await asyncio.wait_for(self.reader.readexactly(addr_len), timeout=10)
+                target_host = addr_bytes.decode()
+            elif atyp == 4:
+                addr_bytes = await asyncio.wait_for(self.reader.readexactly(16), timeout=10)
+                target_host = socket.inet_ntop(socket.AF_INET6, addr_bytes)
+            else:
+                return
+        except (asyncio.IncompleteReadError, asyncio.TimeoutError):
             return
 
-        port_bytes = await self.reader.read(2)
+        try:
+            port_bytes = await asyncio.wait_for(self.reader.readexactly(2), timeout=10)
+        except (asyncio.IncompleteReadError, asyncio.TimeoutError):
+            return
+
         target_port = struct.unpack("!H", port_bytes)[0]
 
         if cmd == 1:
@@ -151,12 +168,14 @@ class AsyncSocks5Handler:
         )
 
     async def _handle_socks4(self) -> None:
-        header = await self.reader.read(7)
-        if len(header) < 7:
+        try:
+            header = await asyncio.wait_for(self.reader.readexactly(7), timeout=10)
+        except (asyncio.IncompleteReadError, asyncio.TimeoutError):
             return
 
-        port = struct.unpack("!H", header[0:2])[0]
-        ip_bytes = header[2:6]
+        cmd = header[0]
+        port = struct.unpack("!H", header[1:3])[0]
+        ip_bytes = header[3:7]
 
         while True:
             byte = await self.reader.read(1)
