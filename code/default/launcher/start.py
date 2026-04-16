@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # coding:utf-8
 
 import platform
@@ -49,7 +49,7 @@ import web_control
 import module_init
 import update
 import update_from_github
-import download_modules
+
 import global_var
 
 
@@ -166,8 +166,6 @@ def main():
         xlog.debug("Popup %s on startup", url)
         webbrowser.open(url)
 
-    if has_desktop:
-        download_modules.start_download()
     update_from_github.cleanup()
 
     if config.show_systray and not no_systray:

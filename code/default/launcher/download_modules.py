@@ -123,22 +123,5 @@ def get_sha256(fn):
         return sha256_dict
 
 
-def download_worker():
-    switchyomega_path = os.path.join(top_path, "SwitchyOmega")
-    if not os.path.isdir(switchyomega_path):
-        return
-
-    time.sleep(150)
-    sha256_fn = os.path.join(switchyomega_path, "Sha256.txt")
-    download_file("https://raw.githubusercontent.com/XX-net/XX-Net/master/SwitchyOmega/Sha256.txt", sha256_fn)
-    sha256_dict = get_sha256(sha256_fn)
-    download_file("https://github.com/XX-net/XX-Net/releases/download/5.1.1/SwitchyOmega.zip",
-                  os.path.join(switchyomega_path, "SwitchyOmega.zip"), sha256_dict.get("SwitchyOmega.zip", None))
-    download_file("https://github.com/XX-net/XX-Net/releases/download/3.15.0/AutoProxy.xpi",
-                  os.path.join(switchyomega_path, "AutoProxy.xpi"), sha256_dict.get("AutoProxy.xpi", None))
-
-
 def start_download():
-    th = threading.Thread(target=download_worker, name="file_downloader")
-    th.start()
     return True

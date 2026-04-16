@@ -609,10 +609,8 @@ class Http_Handler(http_server.HttpServerHandler):
             data = json.dumps(update_from_github.progress)
         elif reqs['cmd'] == ['get_new_version']:
             current_version = update_from_github.current_version()
-            github_versions = update_from_github.get_github_versions()
             data = '{"res":"success", "test_version":"%s", "stable_version":"%s", "current_version":"%s"}' % (
-            github_versions[0][1], github_versions[1][1], current_version)
-            xlog.info("%s", data)
+            current_version, current_version, current_version)
         elif reqs['cmd'] == ['update_version']:
             version = reqs['version']
 

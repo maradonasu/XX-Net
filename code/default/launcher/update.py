@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # coding:utf-8
 
 import os, stat
@@ -244,49 +244,7 @@ def general_gtk_callback(widget=None, data=None):
 
 
 def check_update():
-    try:
-        if update_from_github.update_info == "dont-check":
-            return
-
-        # check_push_update()  # server broken
-
-        update_rule = config.check_update
-        if update_rule not in ("stable", "notice-stable", "test", "notice-test"):
-            return
-
-        try:
-            versions = update_from_github.get_github_versions()
-        except Exception as e:
-            xlog.warn("check_update get version failed. e:%r", e)
-            return
-
-        current_version = update_from_github.current_version()
-        test_version, stable_version = versions[0][1], versions[1][1]
-        if test_version != config.skip_test_version:
-            if update_rule == "notice-test":
-                if compare_versions(current_version, test_version) < 0:
-                    xlog.info("checked new test version %s", test_version)
-                    update_from_github.update_info = '{"type":"test", "version":"%s"}' % test_version
-            elif update_rule == "test":
-                if compare_versions(current_version, test_version) < 0:
-                    xlog.info("update to test version %s", test_version)
-                    update_from_github.update_version(test_version)
-        if stable_version != config.skip_stable_version:
-            if update_rule == "notice-stable":
-                if compare_versions(current_version, stable_version) < 0:
-                    xlog.info("checked new stable version %s", stable_version)
-                    update_from_github.update_info = '{"type":"stable", "version":"%s"}' % stable_version
-            elif update_rule == "stable":
-                if compare_versions(current_version, stable_version) < 0:
-                    xlog.info("update to stable version %s", stable_version)
-                    update_from_github.update_version(stable_version)
-    except IOError as e:
-        xlog.exception("check update fail:%r", e)
-    except Exception as e:
-        xlog.exception("check_update fail:%r", e)
-    finally:
-        if update_from_github.update_info == "init":
-            update_from_github.update_info = ""
+    return
 
 
 def check_push_update():
