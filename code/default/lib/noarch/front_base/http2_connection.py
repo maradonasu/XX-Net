@@ -380,8 +380,11 @@ class Http2Worker(HttpWorker):
                 stream = self.streams[frame.stream_id]
             except KeyError:
                 if frame.type not in [WindowUpdateFrame.type, RstStreamFrame.type]:
-                    self.logger.warn("%s Unexpected stream identifier %d, frame.type:%s",
+                    self.logger.debug("%s Unexpected stream identifier %d, frame.type:%s, sending RST_STREAM",
                                           self.ip_str, frame.stream_id, frame)
+                    rst = RstStreamFrame(frame.stream_id)
+                    rst.error_code = 2  # STREAM_CLOSED
+                    self._send_cb(rst)
                 return
             stream.receive_frame(frame)
         else:

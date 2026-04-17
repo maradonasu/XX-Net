@@ -345,7 +345,12 @@ class Stream(object):
             return
 
         self.task.responsed = True
-        status = int(self.response_headers[b':status'][0])
+        status_header = self.response_headers.get(b':status')
+        if not status_header:
+            self.logger.warn("%s missing :status header in response, headers: %s", self.ip_str, self.response_headers)
+            status = 502
+        else:
+            status = int(status_header[0])
         strip_headers(self.response_headers)
         response = _BaseResponse(status=status, headers=self.response_headers)
         response.ssl_sock = self.connection.ssl_sock

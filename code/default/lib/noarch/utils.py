@@ -125,13 +125,12 @@ def str2hex(data: Union[str, bytes]) -> str:
     return data.hex(':')
 
 
-def get_ip_maskc(ip_str):
+def get_ip_maskc(ip_str: str) -> str:
     head = ".".join(ip_str.split(".")[:-1])
     return head + ".0"
 
 
-def split_ip(strline):
-    """从每组地址中分离出起始IP以及结束IP"""
+def split_ip(strline: str) -> tuple[str, str]:
     begin = ""
     end = ""
     if "-" in strline:
@@ -179,7 +178,7 @@ def split_ip(strline):
     return begin, end
 
 
-def generate_random_lowercase(n):
+def generate_random_lowercase(n: int) -> bytearray:
     min_lc = ord(b'a')
     len_lc = 26
     ba = bytearray(os.urandom(n))
@@ -190,15 +189,15 @@ def generate_random_lowercase(n):
 
 
 class SimpleCondition(object):
-    def __init__(self):
-        self.lock = threading.Condition()
+    def __init__(self) -> None:
+        self.lock: threading.Condition = threading.Condition()
 
-    def notify(self):
+    def notify(self) -> None:
         self.lock.acquire()
         self.lock.notify()
         self.lock.release()
 
-    def wait(self, timeout=None):
+    def wait(self, timeout: Optional[float] = None) -> None:
         self.lock.acquire()
         self.lock.wait(timeout)
         self.lock.release()
@@ -295,7 +294,7 @@ def compare_version(version: str, reference_version: str) -> int:
         raise e
 
 
-def map_with_parameter(function: Any, datas: Any, args: Any) -> list:
+def map_with_parameter(function: Any, datas: Any, args: Any) -> list[Any]:
     l = []
     for data in datas:
         d_out = function(data, args)
