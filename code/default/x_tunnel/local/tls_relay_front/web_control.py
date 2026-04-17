@@ -25,6 +25,7 @@ class ControlHandler(http_server.HttpServerHandler):
         self.path = path
         self.rfile = rfile
         self.wfile = wfile
+        self.res_headers = {}
 
     def do_GET(self):
         path = urlparse(self.path).path

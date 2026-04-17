@@ -14,12 +14,7 @@ from . import apis
 from . import web_control
 from .context import ctx as _ctx
 
-_USE_ASYNC = os.environ.get("XXNET_ASYNC", "1") == "1"
-
-if _USE_ASYNC:
-    from . import async_client as _client_mod
-else:
-    from . import client as _client_mod
+from . import async_client as _client_mod
 
 
 def is_ready():

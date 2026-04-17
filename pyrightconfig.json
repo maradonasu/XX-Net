@@ -1,0 +1,78 @@
+{
+  "include": [
+    "code/default/lib/noarch",
+    "code/default/x_tunnel/local",
+    "code/default/launcher"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/node_modules",
+    "code/default/lib/noarch/front_base/openssl_wrap.py",
+    "code/default/lib/noarch/scrypto",
+    "code/default/lib/noarch/idna",
+    "code/default/lib/noarch/subj_alt_name.py",
+    "code/default/lib/noarch/front_base/check_ip.py",
+    "code/default/lib/noarch/front_base/ssl_wrap.py",
+    "code/default/lib/noarch/front_base/http2_stream.py",
+    "code/default/lib/noarch/front_base/async_http_dispatcher.py",
+    "code/default/lib/noarch/http_server.py",
+    "code/default/lib/noarch/hyper_compat",
+    "code/default/launcher/win_compat_suggest.py",
+    "code/default/launcher/win_tray.py",
+    "code/default/launcher/web_control.py"
+  ],
+  "ignore": [
+    "code/default/lib/noarch/encrypt.py",
+    "code/default/x_tunnel/local/cloudflare_front",
+    "code/default/x_tunnel/local/cloudfront_front",
+    "code/default/x_tunnel/local/seley_front",
+    "code/default/x_tunnel/local/tls_relay_front",
+    "code/default/x_tunnel/local/direct_front.py",
+    "code/default/x_tunnel/local/web_control.py",
+    "code/default/x_tunnel/local/config.py",
+    "code/default/x_tunnel/local/client.py",
+    "code/default/x_tunnel/local/async_client.py",
+    "code/default/x_tunnel/local/proxy_session.py",
+    "code/default/x_tunnel/local/async_proxy_session.py",
+    "code/default/x_tunnel/local/base_container.py",
+    "code/default/x_tunnel/local/async_base_container.py",
+    "code/default/lib/noarch/utils.py"
+  ],
+  "defineConstant": {},
+  "typeCheckingMode": "basic",
+  "useLibraryCodeForTypes": true,
+  "reportMissingImports": "warning",
+  "reportRedeclaration": "warning",
+  "reportMissingTypeStubs": false,
+  "reportUnusedImport": "warning",
+  "reportUnusedClass": "warning",
+  "reportUnusedFunction": "warning",
+  "reportUnusedVariable": "warning",
+  "reportDuplicateImport": "warning",
+  "reportGeneralTypeIssues": "warning",
+  "reportOptionalMemberAccess": "warning",
+  "reportAttributeAccessIssue": "warning",
+  "reportReturnType": "warning",
+  "reportArgumentType": "warning",
+  "reportOperatorIssue": "warning",
+  "reportAssignmentType": "warning",
+  "reportCallIssue": "warning",
+  "reportUndefinedVariable": "warning",
+  "reportOptionalSubscript": "warning",
+  "reportOptionalOperand": "warning",
+  "reportOptionalCall": "warning",
+  "reportUnsupportedDunderAll": "warning",
+  "reportUnusedExcept": "warning",
+  "disableBytesTypePromotions": true,
+  "pythonVersion": "3.12",
+  "pythonPlatform": "All",
+  "executionEnvironments": [
+    {
+      "root": "code/default"
+    }
+  ],
+  "extraPaths": [
+    "code/default",
+    "code/default/lib/noarch"
+  ]
+}

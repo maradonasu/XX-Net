@@ -15,29 +15,16 @@ xlog = getLogger("x_tunnel")
 
 import utils
 import encrypt
-from . import global_var as g
+from .context import ctx
 from .async_base_container import (
     AsyncWaitQueue, AsyncSendBuffer, AsyncConnectionPipe,
-    AsyncConn, AsyncBlockReceivePool
+    AsyncConn, AsyncBlockReceivePool, WriteBuffer, ReadBuffer
 )
-from . import base_container
-from . import proxy_session
+from . import api_client
 
 
-def encrypt_data(data: Union[bytes, bytearray]) -> bytes:
-    if g.config and g.config.encrypt_data:
-        return encrypt.Encryptor(g.config.encrypt_password, g.config.encrypt_method).encrypt(data)
-    return data
-
-
-def decrypt_data(data: Union[bytes, memoryview]) -> bytes:
-    if g.config and getattr(g.config, 'encrypt_data', None):
-        if isinstance(data, memoryview):
-            data = data.tobytes()
-        return encrypt.Encryptor(g.config.encrypt_password, g.config.encrypt_method).decrypt(data)
-    if isinstance(data, memoryview):
-        return data.tobytes()
-    return data
+encrypt_data = api_client.encrypt_data
+decrypt_data = api_client.decrypt_data
 
 
 def traffic_readable(num: float, units: Tuple[str, str, str, str] = ('B', 'KB', 'MB', 'GB')) -> str:
@@ -128,7 +115,7 @@ class AsyncReceiveProcess:
 
 class AsyncProxySession:
     def __init__(self) -> None:
-        self.config = g.config
+        self.config = ctx.config
         
         max_payload = 65536
         windows_size = 65536
@@ -371,12 +358,12 @@ class AsyncProxySession:
         
         magic = b"P"
         pack_type = 2
-        protocol_version = g.protocol_version if hasattr(g, 'protocol_version') else 1
+        protocol_version = ctx.protocol_version if hasattr(ctx, 'protocol_version') else 1
         
         upload_data_head = struct.pack("<cBB8sIBIHH", magic, protocol_version, pack_type,
                                        self.session_id, transfer_no,
                                        server_timeout, send_data_len, send_ack_len, download_timeout_len)
-        upload_post_buf = base_container.WriteBuffer(upload_data_head)
+        upload_post_buf = WriteBuffer(upload_data_head)
         upload_post_buf.append(send_data)
         upload_post_buf.append(send_ack)
         upload_post_buf.append(download_timeout)
@@ -393,9 +380,9 @@ class AsyncProxySession:
             loop = asyncio.get_event_loop()
             content, status, response = await loop.run_in_executor(
                 None,
-                lambda: g.http_client.request(
+                lambda: ctx.http_client.request(
                     method="POST",
-                    host=g.server_host,
+                    host=ctx.server_host,
                     path="/data?tid=%d" % transfer_no,
                     data=upload_post_data2,
                     headers={"Content-Length": str(len(upload_post_data2))},
@@ -406,10 +393,10 @@ class AsyncProxySession:
             traffic = len(upload_post_data2) + len(content) + 645
             self.traffic_upload += len(upload_post_data2) + 645
             self.traffic_download += len(content)
-            if hasattr(g, 'quota'):
-                g.quota -= traffic
-                if g.quota < 0:
-                    g.quota = 0
+            if hasattr(ctx, 'quota'):
+                ctx.quota -= traffic
+                if ctx.quota < 0:
+                    ctx.quota = 0
             
         except Exception as e:
             if self.running:
@@ -423,17 +410,16 @@ class AsyncProxySession:
             async with self.lock:
                 self.on_road_num -= 1
         
-        if hasattr(g, 'stat'):
-            g.stat["roundtrip_num"] += 1
+        if hasattr(ctx, 'stat'):
+            ctx.stat["roundtrip_num"] += 1
         time_now = time.time()
         roundtrip_time = time_now - start_time
         
         if status == 521:
             xlog.warn("X-tunnel server is down, try get new server.")
-            g.server_host = None
+            ctx.server_host = None
             await self.stop()
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, proxy_session.login_process)
+            await async_login_process()
             return False
         
         if status != 200:
@@ -462,7 +448,7 @@ class AsyncProxySession:
         
         try:
             content = decrypt_data(content)
-            payload = base_container.ReadBuffer(content)
+            payload = ReadBuffer(content)
             
             magic, version, pack_type = struct.unpack("<cBB", payload.get(3))
             if magic != b"P" or version != protocol_version or pack_type not in [2, 3]:
@@ -540,8 +526,8 @@ class AsyncProxySession:
                 self.server_time_offset = new_offset
                 self.server_time_deviation = roundtrip_time
             
-            if rtt > 8000 and hasattr(g, 'stat'):
-                g.stat["slow_roundtrip"] += 1
+            if rtt > 8000 and hasattr(ctx, 'stat'):
+                ctx.stat["slow_roundtrip"] += 1
             
             xlog.debug("no:%d road_time:%f snd:%d rcv:%d s_pool:%d on_road:%d target:%d speed:%d",
                        transfer_no, rtt, send_data_len, content_len,
@@ -675,7 +661,7 @@ class AsyncProxySession:
     
     async def get_data(self, work_id: int) -> Any:
         time_now = time.time()
-        buf = base_container.WriteBuffer()
+        buf = WriteBuffer()
         
         async with self.lock:
             for sn in self.wait_ack_send_list:
@@ -685,8 +671,8 @@ class AsyncProxySession:
                 
                 payload, send_time = pk
                 if time_now - send_time > self.resend_timeout:
-                    if hasattr(g, 'stat'):
-                        g.stat["resend"] += 1
+                    if hasattr(ctx, 'stat'):
+                        ctx.stat["resend"] += 1
                     buf.append(struct.pack("<II", sn, len(payload)))
                     buf.append(payload)
                     self.wait_ack_send_list[sn] = (payload, time_now)
@@ -699,7 +685,7 @@ class AsyncProxySession:
                 
                 payload_result, sn = await self.send_buffer.get()
                 if payload_result and sn > 0:
-                    if isinstance(payload_result, base_container.WriteBuffer):
+                    if isinstance(payload_result, WriteBuffer):
                         payload_bytes = payload_result.to_bytes()
                     else:
                         payload_bytes = bytes(payload_result)
@@ -723,7 +709,7 @@ class AsyncProxySession:
            (self.last_receive_time > self.last_send_time and
             time_now - self.last_receive_time > self.ack_delay):
             
-            buf = base_container.WriteBuffer()
+            buf = WriteBuffer()
             async with self.lock:
                 buf.append(struct.pack("<I", self.receive_process.next_sn - 1))
                 for sn in self.receive_process.block_list:
@@ -733,7 +719,7 @@ class AsyncProxySession:
         return b""
     
     async def get_down_sn_timeout_list_pack(self) -> Any:
-        buf = base_container.WriteBuffer()
+        buf = WriteBuffer()
         if self.server_time_deviation > self.server_time_max_deviation:
             return buf
         
@@ -853,7 +839,7 @@ class AsyncProxySession:
     
     async def download_data_processor(self, data: bytes) -> None:
         try:
-            payload = base_container.ReadBuffer(data)
+            payload = ReadBuffer(data)
             while len(payload):
                 conn_id, payload_len = struct.unpack("<II", payload.get(8))
                 conn_payload = payload.get_buf(payload_len)
@@ -906,7 +892,7 @@ class AsyncProxySession:
         if not self.running:
             return
         
-        buf = base_container.WriteBuffer()
+        buf = WriteBuffer()
         buf.append(struct.pack("<II", conn_id, len(data)))
         buf.append(data)
         await self.send_buffer.add(buf.to_bytes())
@@ -942,7 +928,7 @@ class AsyncProxySession:
             self.conn_list.clear()
     
     async def login_session(self) -> bool:
-        if not g.server_host:
+        if not ctx.server_host:
             return False
         
         start_time = time.time()
@@ -950,15 +936,15 @@ class AsyncProxySession:
             try:
                 magic = b"P"
                 pack_type = 1
-                protocol_version = g.protocol_version if hasattr(g, 'protocol_version') else 1
+                protocol_version = ctx.protocol_version if hasattr(ctx, 'protocol_version') else 1
                 
                 head = struct.pack("<cBB8sIHIIHH", magic, protocol_version, pack_type,
                                   self.session_id,
                                   self.max_payload, int(self.send_delay * 1000), self.windows_size,
                                   int(self.windows_ack), int(self.resend_timeout * 1000), int(self.ack_delay * 1000))
                 
-                login_account = g.config.login_account if self.config and hasattr(self.config, 'login_account') else ""
-                login_password = g.config.login_password if self.config and hasattr(self.config, 'login_password') else ""
+                login_account = ctx.config.login_account if self.config and hasattr(self.config, 'login_account') else ""
+                login_password = ctx.config.login_password if self.config and hasattr(self.config, 'login_password') else ""
                 
                 head += struct.pack("<H", len(login_account)) + utils.to_bytes(login_account)
                 head += struct.pack("<H", len(login_password)) + utils.to_bytes(login_password)
@@ -971,9 +957,9 @@ class AsyncProxySession:
                 loop = asyncio.get_event_loop()
                 content, status, response = await loop.run_in_executor(
                     None,
-                    lambda: g.http_client.request(
+                    lambda: ctx.http_client.request(
                         method="POST",
-                        host=g.server_host,
+                        host=ctx.server_host,
                         path="/data",
                         data=upload_post_data,
                         timeout=self.network_timeout
@@ -983,7 +969,7 @@ class AsyncProxySession:
                 time_cost = time.time() - start_time
                 
                 if status == 521:
-                    g.server_host = None
+                    ctx.server_host = None
                     return False
                 
                 if status != 200:
@@ -1012,14 +998,14 @@ class AsyncProxySession:
             if isinstance(message, memoryview):
                 message = message.tobytes()
             
-            protocol_version_expected = g.protocol_version if hasattr(g, 'protocol_version') else 1
+            protocol_version_expected = ctx.protocol_version if hasattr(ctx, 'protocol_version') else 1
             if magic != b"P" or protocol_version != protocol_version_expected or pack_type != 1:
                 xlog.error("login_session head error: magic:%s version:%d/%d pack_type:%d",
                            magic, protocol_version, protocol_version_expected, pack_type)
                 return False
             
             if res != 0:
-                g.last_api_error = "session server login fail, code:%d msg:%s" % (res, message)
+                ctx.last_api_error = "session server login fail, code:%d msg:%s" % (res, message)
                 xlog.warn("login fail, res:%d msg:%s", res, message)
                 return False
             
@@ -1031,10 +1017,10 @@ class AsyncProxySession:
             except Exception as e:
                 xlog.warn("login_session %s json error:%r", message, e)
             
-            if hasattr(g, 'http_client') and hasattr(g.http_client, 'set_session_host'):
-                g.http_client.set_session_host(g.server_host)
+            if hasattr(ctx, 'http_client') and hasattr(ctx.http_client, 'set_session_host'):
+                ctx.http_client.set_session_host(ctx.server_host)
             
-            g.last_api_error = ""
+            ctx.last_api_error = ""
             xlog.info("login success, session_id: %s", self.session_id)
             return True
         except Exception as e:
@@ -1044,9 +1030,9 @@ class AsyncProxySession:
     @staticmethod
     def get_login_extra_info() -> str:
         data = {
-            "version": getattr(g, 'xxnet_version', 'unknown'),
-            "system": getattr(g, 'system', 'unknown'),
-            "device": getattr(g, 'client_uuid', 'unknown')
+            "version": getattr(ctx, 'xxnet_version', 'unknown'),
+            "system": getattr(ctx, 'system', 'unknown'),
+            "device": getattr(ctx, 'client_uuid', 'unknown')
         }
         return json.dumps(data)
     
@@ -1085,12 +1071,50 @@ class AsyncProxySession:
         self.traffic_speed_calculation()
         
         res = {}
+        for front in ctx.all_fronts:
+            if not front:
+                continue
+            name = front.name
+            dispatcher = front.get_dispatcher(ctx.server_host)
+            if not dispatcher:
+                res[name] = {
+                    "score": "False",
+                    "rtt": 0,
+                    "success_num": 0,
+                    "fail_num": 0,
+                    "worker_num": 0,
+                    "total_traffics": "Up: 0.0 B / Down: 0.0 B"
+                }
+                continue
+            score = dispatcher.get_score()
+            if score is None:
+                score = "False"
+            else:
+                score = int(score)
+
+            if stat_type == "second":
+                stat = dispatcher.second_stat
+            elif stat_type == "minute":
+                stat = dispatcher.minute_stat
+            else:
+                stat = dispatcher.second_stat
+
+            res[name] = {
+                "score": score,
+                "rtt": stat["rtt"],
+                "success_num": dispatcher.success_num,
+                "fail_num": dispatcher.fail_num,
+                "worker_num": dispatcher.worker_num(),
+                "total_traffics": "Up: %s / Down: %s" % (
+                    traffic_readable(dispatcher.total_sent), traffic_readable(dispatcher.total_received))
+            }
+        
         res["global"] = {
-            "handle_num": getattr(getattr(g, 'socks5_server', None), 'handler', type('', (), {'handle_num': 0})()).handle_num,
-            "roundtrip_num": getattr(g, 'stat', {}).get("roundtrip_num", 0),
-            "slow_roundtrip": getattr(g, 'stat', {}).get("slow_roundtrip", 0),
-            "timeout_roundtrip": getattr(g, 'stat', {}).get("timeout_roundtrip", 0),
-            "resend": getattr(g, 'stat', {}).get("resend", 0),
+            "handle_num": getattr(getattr(ctx, 'socks5_server', None), 'handler', type('', (), {'handle_num': 0})()).handle_num,
+            "roundtrip_num": getattr(ctx, 'stat', {}).get("roundtrip_num", 0),
+            "slow_roundtrip": getattr(ctx, 'stat', {}).get("slow_roundtrip", 0),
+            "timeout_roundtrip": getattr(ctx, 'stat', {}).get("timeout_roundtrip", 0),
+            "resend": getattr(ctx, 'stat', {}).get("resend", 0),
             "speed": "Up: %s/s / Down: %s/s" % (traffic_readable(self.upload_speed), traffic_readable(self.download_speed)),
             "total_traffics": "Up: %s / Down: %s" % (traffic_readable(self.traffic_upload), traffic_readable(self.traffic_download))
         }
@@ -1101,34 +1125,33 @@ _login_lock = asyncio.Lock()
 
 
 async def async_login_process() -> bool:
-    if not g.session:
+    if not ctx.session:
         return False
     
     async with _login_lock:
-        if not (g.config and g.config.login_account and g.config.login_password):
+        if not (ctx.config and ctx.config.login_account and ctx.config.login_password):
             xlog.debug("x-tunnel no account")
             return False
         
-        if not g.server_host:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, proxy_session.request_balance)
-            if not g.server_host:
+        if not ctx.server_host:
+            await api_client.async_request_balance()
+            if not ctx.server_host:
                 xlog.debug("no server host after request_balance")
                 return False
         
-        if hasattr(g, 'session') and g.session and hasattr(g.session, 'last_send_time'):
-            if g.session.running and time.time() - g.session.last_send_time > 300 - 5:
+        if hasattr(ctx, 'session') and ctx.session and hasattr(ctx.session, 'last_send_time'):
+            if ctx.session.running and time.time() - ctx.session.last_send_time > 300 - 5:
                 xlog.warn("session timeout, reset")
-                await g.session.reset()
+                await ctx.session.reset()
         
-        if not g.session.running:
-            return await g.session.start()
+        if not ctx.session.running:
+            return await ctx.session.start()
     
     return True
 
 
 async def async_create_conn(sock: Any, host: Union[str, bytes], port: int, log: bool = False) -> Optional[int]:
-    if not (g.config and g.config.login_account and g.config.login_password):
+    if not (ctx.config and ctx.config.login_account and ctx.config.login_password):
         await asyncio.sleep(1)
         return None
     
@@ -1137,6 +1160,6 @@ async def async_create_conn(sock: Any, host: Union[str, bytes], port: int, log: 
             break
         await asyncio.sleep(1)
     
-    if g.session and g.session.running:
-        return await g.session.create_conn(sock, host, port, log)
+    if ctx.session and ctx.session.running:
+        return await ctx.session.create_conn(sock, host, port, log)
     return None

@@ -26,8 +26,8 @@ class CheckNetwork(object):
 
     def _load_rules(self):
         try:
-            from . import global_var as g
-            config = getattr(g, "config", None)
+            from .context import ctx
+            config = getattr(ctx, "config", None)
             if config:
                 return getattr(config, "check_local_network_rules", "normal")
         except Exception:

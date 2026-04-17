@@ -3,8 +3,6 @@
 
 import sys
 import os
-import time
-import unittest.mock as mock
 
 noarch_lib = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'noarch'))
 if noarch_lib not in sys.path:
@@ -16,43 +14,38 @@ if code_dir not in sys.path:
 
 from unittest import TestCase
 
-class TestProxySessionHelpers(TestCase):
+
+class TestAsyncProxySessionHelpers(TestCase):
     def test_traffic_readable(self):
-        import x_tunnel.local.proxy_session as ps
+        from x_tunnel.local.async_proxy_session import traffic_readable
         
-        self.assertEqual(ps.traffic_readable(0), '0.0 B')
-        self.assertEqual(ps.traffic_readable(512), '512.0 B')
-        self.assertEqual(ps.traffic_readable(1024), '1.0 KB')
-        self.assertEqual(ps.traffic_readable(1024 * 1024), '1.0 MB')
-        self.assertEqual(ps.traffic_readable(1024 * 1024 * 1024), '1.0 GB')
+        self.assertEqual(traffic_readable(0), '0.0 B')
+        self.assertEqual(traffic_readable(512), '512.0 B')
+        self.assertEqual(traffic_readable(1024), '1.0 KB')
+        self.assertEqual(traffic_readable(1024 * 1024), '1.0 MB')
+        self.assertEqual(traffic_readable(1024 * 1024 * 1024), '1.0 GB')
 
     def test_traffic_readable_custom_units(self):
-        import x_tunnel.local.proxy_session as ps
+        from x_tunnel.local.async_proxy_session import traffic_readable
         
         custom_units = ('bytes', 'KB', 'MB', 'GB')
-        self.assertEqual(ps.traffic_readable(1024, custom_units), '1.0 KB')
+        self.assertEqual(traffic_readable(1024, custom_units), '1.0 KB')
 
-    def test_sleep_with_running_true(self):
-        import x_tunnel.local.proxy_session as ps
-        import x_tunnel.local.global_var as g
-        
-        g.running = True
-        
-        start_time = time.time()
-        ps.sleep(0.1)
-        elapsed = time.time() - start_time
-        self.assertGreaterEqual(elapsed, 0.09)
-        self.assertLess(elapsed, 0.2)
-        
-        g.running = False
 
-    def test_sleep_with_running_false(self):
-        import x_tunnel.local.proxy_session as ps
-        import x_tunnel.local.global_var as g
+class TestApiClientHelpers(TestCase):
+    def test_get_app_name(self):
+        from x_tunnel.local.api_client import get_app_name
         
-        g.running = False
+        app_name = get_app_name()
+        self.assertIsInstance(app_name, str)
+        self.assertEqual(app_name, "XX-Net")
+
+    def test_encrypt_decrypt_data(self):
+        from x_tunnel.local.api_client import encrypt_data, decrypt_data
+        from x_tunnel.local.context import ctx
         
-        start_time = time.time()
-        ps.sleep(5)
-        elapsed = time.time() - start_time
-        self.assertLess(elapsed, 1)
+        ctx.config = None
+        original = b"test data"
+        encrypted = encrypt_data(original)
+        decrypted = decrypt_data(encrypted)
+        self.assertEqual(decrypted, original)

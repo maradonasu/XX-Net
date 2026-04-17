@@ -147,8 +147,7 @@ class TestAsyncConnFlowControl(TestCase):
         async_loop.run_async(do_test(), timeout=5)
 
     def test_transfer_received_data_sends_protocol_message(self):
-        from x_tunnel.local.async_base_container import AsyncConn
-        from x_tunnel.local.base_container import WriteBuffer
+        from x_tunnel.local.async_base_container import AsyncConn, WriteBuffer
 
         async def do_test():
             sent_data = []
@@ -190,8 +189,7 @@ class TestAsyncConnFlowControl(TestCase):
         async_loop.run_async(do_test(), timeout=5)
 
     def test_recv_seq_increments(self):
-        from x_tunnel.local.async_base_container import AsyncConn
-        from x_tunnel.local.base_container import WriteBuffer
+        from x_tunnel.local.async_base_container import AsyncConn, WriteBuffer
 
         async def do_test():
             sent_seqs = []
@@ -215,7 +213,7 @@ class TestAsyncConnFlowControl(TestCase):
 
 class TestAsyncConnCommandProcessing(TestCase):
     def _make_readbuf(self, data):
-        from x_tunnel.local.base_container import ReadBuffer
+        from x_tunnel.local.async_base_container import ReadBuffer
         return ReadBuffer(data)
 
     def test_process_cmd_data_forwards_to_writer(self):
@@ -340,11 +338,11 @@ class TestProtocolVersionValidation(TestCase):
 
     def test_parse_login_accepts_valid(self):
         from x_tunnel.local.async_proxy_session import AsyncProxySession
-        from x_tunnel.local import global_var as g
+        from x_tunnel.local.context import ctx
 
         async def do_test():
             session = AsyncProxySession()
-            pv = getattr(g, 'protocol_version', 1)
+            pv = getattr(ctx, 'protocol_version', 1)
             msg = json.dumps({"full_log": False}).encode()
             info = b"P" + struct.pack("BB", pv, 1) + struct.pack("<H", 0) + msg
             result = session._parse_login_response(info)

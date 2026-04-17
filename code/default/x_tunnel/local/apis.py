@@ -1,6 +1,6 @@
 import time
 
-from . import global_var as g
+from .context import ctx
 from . import front_dispatcher
 
 from log_buffer import getLogger
@@ -17,12 +17,12 @@ def set_proxy(args):
 
 
 def is_workable():
-    if g.workable_call_times == 0:
+    if ctx.workable_call_times == 0:
         loop_num = 8
     else:
         loop_num = 1
 
-    g.workable_call_times += 1
+    ctx.workable_call_times += 1
     for i in range(0, loop_num):
         for front in front_dispatcher.session_fronts:
             score = front.get_dispatcher().get_score()
@@ -40,5 +40,5 @@ def is_workable():
 def set_bind_ip(args):
     xlog.info("set_bind_ip:%s", args)
 
-    g.config.socks_host = args["ip"]
-    g.config.save()
+    ctx.config.socks_host = args["ip"]
+    ctx.config.save()

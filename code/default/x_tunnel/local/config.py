@@ -1,99 +1,83 @@
-﻿import sys
+import sys
 import os
 
+from dataclasses import dataclass, field
+
 import env_info
+
 data_path = env_info.data_path
 data_xtunnel_path = os.path.join(data_path, 'x_tunnel')
 
-import config_manager as xconfig
+import config_manager
 from log_buffer import getLogger
+
 xlog = getLogger("x_tunnel")
+
+
+@dataclass
+class XTunnelConfig:
+    log_level: str = "DEBUG"
+    upload_logs: bool = True
+    write_log_file: int = 0
+    save_start_log: int = 1500
+    show_debug: int = 0
+    delay_collect_log: int = 3 * 60
+    delay_collect_log2: int = 30
+
+    encrypt_data: int = 0
+    encrypt_password: str = "encrypt_pass"
+    encrypt_method: str = "aes-256-cfb"
+
+    api_server: str = "center.xx-net.org"
+    scan_servers: list = field(default_factory=lambda: ["scan1"])
+    server_host: str = ""
+    server_port: int = 443
+    use_https: int = 1
+    port_range: int = 1
+
+    login_account: str = ""
+    login_password: str = ""
+
+    conn_life: int = 30
+
+    socks_host: str = "127.0.0.1"
+    socks_port: int = 1080
+    update_cloudflare_domains: bool = True
+
+    concurent_thread_num: int = 12
+    min_on_road: int = 2
+    server_time_max_deviation: float = 0.6
+    send_timeout_retry: int = 3
+    server_download_timeout_retry: int = 3
+    send_delay: int = 5
+    resend_timeout: int = 3000
+    ack_delay: int = 150
+    max_payload: int = 256 * 1024
+    roundtrip_timeout: int = 20
+    network_timeout: int = 5
+    windows_size: int = 10 * 1024 * 1024
+
+    timeout_threshold: int = 2
+    report_interval: int = 5 * 60
+
+    enable_cloudflare: int = 1
+    enable_cloudfront: int = 0
+    enable_seley: int = 1
+    enable_tls_relay: int = 1
+    enable_direct: int = 0
+    local_auto_front: int = 1
+    check_local_network_rules: str = "normal"
 
 
 def load_config():
     if len(sys.argv) > 2 and sys.argv[1] == "-f":
-        config_path = sys.argv[2]
+        path = sys.argv[2]
     else:
-        config_path = os.path.join(data_xtunnel_path, 'client.json')
+        path = os.path.join(data_xtunnel_path, 'client.json')
 
-    xlog.info("use config_path:%s", config_path)
+    xlog.info("use config_path:%s", path)
 
-    config = xconfig.Config(config_path)
-
-    config.set_var("log_level", "DEBUG")
-    config.set_var("upload_logs", True)
-    config.set_var("write_log_file", 0)
-    config.set_var("save_start_log", 1500)
-    config.set_var("show_debug", 0)
-    config.set_var("delay_collect_log", 3 * 60)
-    config.set_var("delay_collect_log2", 30)
-
-    config.set_var("encrypt_data", 0)
-    config.set_var("encrypt_password", "encrypt_pass")
-    config.set_var("encrypt_method", "aes-256-cfb")
-
-    config.set_var("api_server", "center.xx-net.org")
-    config.set_var("scan_servers", ["scan1"])
-    config.set_var("server_host", "")
-    config.set_var("server_port", 443)
-    config.set_var("use_https", 1)
-    config.set_var("port_range", 1)
-
-    config.set_var("login_account", "")
-    config.set_var("login_password", "")
-
-    config.set_var("conn_life", 30)
-
-    config.set_var("socks_host", "127.0.0.1")
-    config.set_var("socks_port", 1080)
-    config.set_var("update_cloudflare_domains", True)
-
-    # performance parameters
-    # range 2 - 100, reduced from 20 to 12 for lower thread pressure
-    config.set_var("concurent_thread_num", 12)
-
-    # min roundtrip on road if connectoin exist
-    config.set_var("min_on_road", 2)
-
-    config.set_var("server_time_max_deviation", 0.6)
-
-    # reduced from 4 to 3 for faster retry
-    config.set_var("send_timeout_retry", 3)
-
-    config.set_var("server_download_timeout_retry", 3)
-
-    # range 1 - 1000, ms, reduced from 10 to 5 for faster upload
-    config.set_var("send_delay", 5)
-
-    # range 1 - 20000, ms, reduced from 5000 to 3000 for faster recovery
-    config.set_var("resend_timeout", 3000)
-
-    # range 1 - resend_timeout, ms, reduced from 300 to 150 for faster ack
-    config.set_var("ack_delay", 150)
-
-    # max 10M
-    config.set_var("max_payload", 256 * 1024)
-
-    # range 1 - 30, reduced from 25 to 20 for faster timeout detection
-    config.set_var("roundtrip_timeout", 20)
-
-    config.set_var("network_timeout", 5)
-
-    config.set_var("windows_size", 10 * 1024 * 1024)  # will recalulate based on: max_payload * concurent_thread_num *2
-
-    # reporter
-    config.set_var("timeout_threshold", 2)
-    config.set_var("report_interval", 5 * 60)
-
-    config.set_var("enable_cloudflare", 1)
-    config.set_var("enable_cloudfront", 0)
-    config.set_var("enable_seley", 1)
-    config.set_var("enable_tls_relay", 1)
-    config.set_var("enable_direct", 0)
-    config.set_var("local_auto_front", 1)
-    config.set_var("check_local_network_rules", "normal")
-
-    config.load()
+    config = config_manager.TypedConfig(XTunnelConfig, path)
 
     config.windows_ack = 0.05 * config.windows_size
     config.windows_size = config.max_payload * config.concurent_thread_num * 2

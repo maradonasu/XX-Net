@@ -780,3 +780,27 @@ class TestAsyncIpManager(TestCase):
     def test_import_works(self):
         from front_base.async_ip_manager import AsyncIpManagerBase
         self.assertTrue(True)
+
+
+class TestAsyncDefaultPath(TestCase):
+    def test_async_client_is_only_client(self):
+        import os
+        import sys
+        
+        code_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        if code_root not in sys.path:
+            sys.path.insert(0, code_root)
+        
+        import x_tunnel.local as xtunnel_local
+        self.assertEqual(xtunnel_local._client_mod.__name__, 'x_tunnel.local.async_client')
+    
+    def test_async_proxy_session_is_default(self):
+        import os
+        import sys
+        
+        code_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        if code_root not in sys.path:
+            sys.path.insert(0, code_root)
+        
+        from x_tunnel.local.async_proxy_session import AsyncProxySession
+        self.assertTrue(AsyncProxySession is not None)

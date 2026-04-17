@@ -3,21 +3,18 @@
 """
 XTunnelContext - Encapsulated global state for X-Tunnel module.
 
-All module-level globals from the former global_var.py are now
-attributes of a single XTunnelContext instance.
+All module-level globals are now attributes of a single XTunnelContext instance.
 
 Usage::
 
-    from .context import ctx          # preferred (new code)
-    from . import global_var as g     # backward-compatible (existing code)
+    from .context import ctx
 
-Both ``ctx`` and ``g`` resolve to the same proxy, which delegates
-every attribute access to the underlying XTunnelContext singleton.
+The ``ctx`` proxy delegates every attribute access to the underlying
+XTunnelContext singleton.
 """
 
 from __future__ import annotations
 
-import sys
 from typing import Any, Dict, List, Optional
 
 
@@ -41,6 +38,9 @@ class XTunnelStat:
 
     def __setitem__(self, key: str, value: int) -> None:
         setattr(self, key, value)
+
+    def get(self, key: str, default: int = 0) -> int:
+        return getattr(self, key, default)
 
 
 class XTunnelContext:
@@ -99,6 +99,8 @@ class XTunnelContext:
         self._statistic_running: bool = False
         self._front_fail_counts: Dict[str, int] = {}
         self._front_last_fail_time: Dict[str, float] = {}
+        self._front_disabled: Dict[str, float] = {}
+        self._front_success_counts: Dict[str, int] = {}
 
     def reset_stat(self) -> None:
         self.stat.roundtrip_num = 0

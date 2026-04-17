@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 import importlib
 import subprocess
@@ -197,6 +197,117 @@ class TestConfigManager(TestCase):
             self.assertEqual(data["test_key"], "new_value")
         finally:
             os.unlink(path)
+
+    def test_typed_config_with_dataclass(self):
+        from dataclasses import dataclass, field
+        import config_manager
+
+        @dataclass
+        class DummyConfig:
+            host: str = "localhost"
+            port: int = 8080
+            tags: list = field(default_factory=list)
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write('{"host": "example.com", "port": 9090}')
+            path = f.name
+        try:
+            tc = config_manager.TypedConfig(DummyConfig, path)
+            self.assertEqual(tc.host, "example.com")
+            self.assertEqual(tc.port, 9090)
+            self.assertEqual(tc.tags, [])
+
+            tc.port = 7070
+            tc.save()
+            with open(path, 'r') as f:
+                data = json.load(f)
+            self.assertEqual(data["port"], 7070)
+            self.assertNotIn("tags", data)
+            self.assertEqual(data["host"], "example.com")
+        finally:
+            os.unlink(path)
+
+    def test_typed_config_load_method(self):
+        from dataclasses import dataclass
+        import config_manager
+
+        @dataclass
+        class DummyConfig:
+            name: str = "default"
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write('{}')
+            path = f.name
+        try:
+            tc = config_manager.TypedConfig(DummyConfig, path)
+            self.assertEqual(tc.name, "default")
+
+            with open(path, 'w') as f:
+                json.dump({"name": "reloaded"}, f)
+
+            tc.load()
+            self.assertEqual(tc.name, "reloaded")
+        finally:
+            os.unlink(path)
+
+    def test_typed_config_default_config_property(self):
+        from dataclasses import dataclass
+        import config_manager
+
+        @dataclass
+        class DummyConfig:
+            host: str = "localhost"
+            port: int = 8080
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write('{}')
+            path = f.name
+        try:
+            tc = config_manager.TypedConfig(DummyConfig, path)
+            defaults = tc.default_config
+            self.assertEqual(defaults["host"], "localhost")
+            self.assertEqual(defaults["port"], 8080)
+        finally:
+            os.unlink(path)
+
+    def test_typed_config_dynamic_attr(self):
+        from dataclasses import dataclass
+        import config_manager
+
+        @dataclass
+        class DummyConfig:
+            base: int = 10
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write('{}')
+            path = f.name
+        try:
+            tc = config_manager.TypedConfig(DummyConfig, path)
+            tc.computed = tc.base * 2
+            self.assertEqual(tc.computed, 20)
+
+            tc.save()
+            with open(path, 'r') as f:
+                data = json.load(f)
+            self.assertNotIn("computed", data)
+        finally:
+            os.unlink(path)
+
+    def test_launcher_config_is_dataclass(self):
+        fpath = os.path.join(self._code_root(), 'launcher', 'config.py')
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('@dataclass', content)
+        self.assertIn('class LauncherConfig', content)
+        self.assertIn('TypedConfig(LauncherConfig', content)
+
+    def test_xtunnel_config_is_dataclass(self):
+        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'config.py')
+        with open(fpath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('@dataclass', content)
+        self.assertIn('class XTunnelConfig', content)
+        self.assertIn('TypedConfig(XTunnelConfig', content)
 
 
 class TestRequirementsUpdated(TestCase):

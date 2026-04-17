@@ -16,8 +16,9 @@ from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
 import http_server
-from . import global_var as g
-from . import proxy_session
+from .context import ctx
+from . import api_client
+from .config import XTunnelConfig
 from .tls_relay_front import web_control as tls_relay_web
 
 current_path = os.path.dirname(os.path.abspath(__file__))
@@ -80,13 +81,14 @@ class ControlHandler(http_server.HttpServerHandler):
         self.path = path
         self.rfile = rfile
         self.wfile = wfile
+        self.res_headers = {}
 
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/log":
             return self.req_log_handler()
         elif path == "/debug":
-            data = g.session.status()
+            data = ctx.session.status()
             return self.send_response('text/plain', data)
         elif path == "/info":
             return self.req_info_handler()
@@ -105,7 +107,7 @@ class ControlHandler(http_server.HttpServerHandler):
                              self.rfile, self.wfile)
             controler.do_GET()
         elif path.startswith("/cloudfront_front/"):
-            if not g.config.enable_cloudfront:
+            if not ctx.config.enable_cloudfront:
                 return self.send_not_found()
 
             path = self.path[17:]
@@ -212,12 +214,12 @@ class ControlHandler(http_server.HttpServerHandler):
         self.send_response(mimetype, data)
 
     def req_info_handler(self):
-        if len(g.config.login_account) == 0 or len(g.config.login_password) == 0:
+        if len(ctx.config.login_account) == 0 or len(ctx.config.login_password) == 0:
             return self.response_json({
                 "res": "logout"
             })
 
-        if g.center_login_process:
+        if ctx.center_login_process:
             return self.response_json({
                 "res": "login_process"
             })
@@ -231,38 +233,38 @@ class ControlHandler(http_server.HttpServerHandler):
             force = 1
 
         time_now = time.time()
-        if force or time_now - g.last_refresh_time > 3600 or \
-                (g.last_api_error.startswith("status:") and (time_now - g.last_refresh_time > 30)):
+        if force or time_now - ctx.last_refresh_time > 3600 or \
+                (ctx.last_api_error.startswith("status:") and (time_now - ctx.last_refresh_time > 30)):
             xlog.debug("x_tunnel force update info")
-            g.last_refresh_time = time_now
+            ctx.last_refresh_time = time_now
 
-            _start_background_task("info__request_balance", proxy_session.request_balance,
+            _start_background_task("info__request_balance", api_client.request_balance,
                                    args=(None, None, False, False))
 
             return self.response_json({
                 "res": "login_process"
             })
 
-        if len(g.last_api_error) and g.last_api_error != 'balance not enough':
+        if len(ctx.last_api_error) and ctx.last_api_error != 'balance not enough':
             res_arr = {
                 "res": "fail",
-                "login_account": "%s" % (g.config.login_account),
-                "reason": g.last_api_error
+                "login_account": "%s" % (ctx.config.login_account),
+                "reason": ctx.last_api_error
             }
         else:
             res_arr = {
                 "res": "success",
-                "login_account": "%s" % (g.config.login_account),
-                "promote_code": g.promote_code,
-                "promoter": g.promoter,
-                "paypal_button_id": g.paypal_button_id,
-                "plans": g.plans,
-                "balance": "%f" % (g.balance),
-                "openai_balance": float(g.openai_balance),
-                "quota": "%d" % (g.quota),
-                "quota_list": g.quota_list,
-                "traffic": g.session.traffic_upload + g.session.traffic_download,
-                "last_fail": g.last_api_error
+                "login_account": "%s" % (ctx.config.login_account),
+                "promote_code": ctx.promote_code,
+                "promoter": ctx.promoter,
+                "paypal_button_id": ctx.paypal_button_id,
+                "plans": ctx.plans,
+                "balance": "%f" % (ctx.balance),
+                "openai_balance": float(ctx.openai_balance),
+                "quota": "%d" % (ctx.quota),
+                "quota_list": ctx.quota_list,
+                "traffic": ctx.session.traffic_upload + ctx.session.traffic_download,
+                "last_fail": ctx.last_api_error
             }
         self.response_json(res_arr)
 
@@ -296,27 +298,27 @@ class ControlHandler(http_server.HttpServerHandler):
                 "reason": "Password format fail"
             })
 
-        g.config.api_server = g.config.default_config["api_server"]
-        if g.config.update_cloudflare_domains and cloudflare_domains:
-            g.http_client.save_cloudflare_domain(cloudflare_domains)
-        if g.tls_relay_front and tls_relay.get("ips"):
-            g.tls_relay_front.set_ips(tls_relay["ips"])
-        if g.seley_front:
-            g.seley_front.set_hosts(seleys.get("hosts", {}))
+        ctx.config.api_server = XTunnelConfictx.api_server
+        if ctx.config.update_cloudflare_domains and cloudflare_domains:
+            ctx.http_client.save_cloudflare_domain(cloudflare_domains)
+        if ctx.tls_relay_front and tls_relay.get("ips"):
+            ctx.tls_relay_front.set_ips(tls_relay["ips"])
+        if ctx.seley_front:
+            ctx.seley_front.set_hosts(seleys.get("hosts", {}))
 
-        res, reason = proxy_session.request_balance(username, password_hash, False,
+        res, reason = api_client.request_balance(username, password_hash, False,
                                                     update_server=True, promoter="")
         if res:
-            g.config.login_account  = username
-            g.config.login_password = password_hash
-            g.config.save()
+            ctx.config.login_account  = username
+            ctx.config.login_password = password_hash
+            ctx.config.save()
             res_arr = {
                 "res": "success",
-                "balance": float(g.balance),
-                "openai_balance": float(g.openai_balance)
+                "balance": float(ctx.balance),
+                "openai_balance": float(ctx.openai_balance)
             }
-            g.last_refresh_time = time.time()
-            g.session.start()
+            ctx.last_refresh_time = time.time()
+            ctx.session.start()
         else:
             res_arr = {
                 "res": "fail",
@@ -346,8 +348,8 @@ class ControlHandler(http_server.HttpServerHandler):
             })
 
         if password == "_HiddenPassword":
-            if username == g.config.login_account and len(g.config.login_password):
-                password_hash = g.config.login_password
+            if username == ctx.config.login_account and len(ctx.config.login_password):
+                password_hash = ctx.config.login_password
             else:
 
                 res_arr = {
@@ -358,19 +360,19 @@ class ControlHandler(http_server.HttpServerHandler):
         else:
             password_hash = str(hashlib.sha256(utils.to_bytes(password)).hexdigest())
 
-        res, reason = proxy_session.request_balance(username, password_hash, is_register,
+        res, reason = api_client.request_balance(username, password_hash, is_register,
                                                     update_server=True, promoter=promoter)
         if res:
-            g.config.login_account  = username
-            g.config.login_password = password_hash
-            g.config.save()
+            ctx.config.login_account  = username
+            ctx.config.login_password = password_hash
+            ctx.config.save()
             res_arr = {
                 "res": "success",
-                "balance": float(g.balance),
-                "openai_balance": float(g.openai_balance)
+                "balance": float(ctx.balance),
+                "openai_balance": float(ctx.openai_balance)
             }
-            g.last_refresh_time = time.time()
-            g.session.start()
+            ctx.last_refresh_time = time.time()
+            ctx.session.start()
         else:
             res_arr = {
                 "res": "fail",
@@ -380,27 +382,27 @@ class ControlHandler(http_server.HttpServerHandler):
         return self.response_json(res_arr)
 
     def req_reset_password(self):
-        app_name = proxy_session.get_app_name()
+        app_name = api_client.get_app_name()
         account = self.postvars.get('username', [""])
         stage = self.postvars.get('stage', [""])
         code = self.postvars.get('code', [""])
         xlog.info("reset password, stage:%s", stage)
 
         if stage == "request_reset_password":
-            res, info = proxy_session.call_api("/request_reset_password", {
+            res, info = api_client.call_api("/request_reset_password", {
                 "account": account,
                 "app_id": app_name,
                 "lang": get_lang(),
             })
             if not res:
                 xlog.warn("request reset password fail:%s", info)
-                _start_background_task("update_quota_loop", proxy_session.update_quota_loop)
+                _start_background_task("update_quota_loop", api_client.update_quota_loop)
                 return self.response_json({"res": "fail", "reason": info})
 
             self.response_json(info)
 
         elif stage == "reset_password_check":
-            res, info = proxy_session.call_api("/reset_password_check", {
+            res, info = api_client.call_api("/reset_password_check", {
                 "account": account,
                 "code": code,
                 "app_id": app_name,
@@ -408,7 +410,7 @@ class ControlHandler(http_server.HttpServerHandler):
             })
             if not res:
                 xlog.warn("reset password check fail:%s", info)
-                _start_background_task("update_quota_loop", proxy_session.update_quota_loop)
+                _start_background_task("update_quota_loop", api_client.update_quota_loop)
                 return self.response_json({"res": "fail", "reason": info})
 
             self.response_json(info)
@@ -416,7 +418,7 @@ class ControlHandler(http_server.HttpServerHandler):
         elif stage == "change_password":
             password = self.postvars.get('password', [""])
             password_hash = str(hashlib.sha256(utils.to_bytes(password)).hexdigest())
-            res, info = proxy_session.call_api("/change_password", {
+            res, info = api_client.call_api("/change_password", {
                 "account": account,
                 "code": code,
                 "password": password_hash,
@@ -425,7 +427,7 @@ class ControlHandler(http_server.HttpServerHandler):
             })
             if not res:
                 xlog.warn("change password fail:%s", info)
-                _start_background_task("update_quota_loop", proxy_session.update_quota_loop)
+                _start_background_task("update_quota_loop", api_client.update_quota_loop)
                 return self.response_json({"res": "fail", "reason": info})
 
             self.response_json(info)
@@ -433,12 +435,12 @@ class ControlHandler(http_server.HttpServerHandler):
             self.response_json({"res": "fail", "reason": "wrong stage"})
 
     def req_logout_handler(self):
-        g.config.login_account = ""
-        g.config.login_password = ""
-        g.config.save()
+        ctx.config.login_account = ""
+        ctx.config.login_password = ""
+        ctx.config.save()
 
-        if g.session:
-            g.session.stop()
+        if ctx.session:
+            ctx.session.stop()
 
         return self.response_json({"res": "success"})
 
@@ -447,24 +449,24 @@ class ControlHandler(http_server.HttpServerHandler):
         reqs = parse_qs(req, keep_blank_values=True)
 
         def is_server_available(server):
-            if g.selectable and server == '':
+            if ctx.selectable and server == '':
                 return True # "auto"
             else:
-                for choice in g.selectable:
+                for choice in ctx.selectable:
                     if choice[0] == server:
                         return True # "selectable"
                 return False # "unselectable"
 
         if reqs['cmd'] == ['get']:
-            g.config.load()
+            ctx.config.load()
             server = {
-                'selectable': g.selectable,
-                'selected': 'auto' if g.config.server_host == '' else g.config.server_host,  # "auto" as default
-                'available': is_server_available(g.config.server_host)
+                'selectable': ctx.selectable,
+                'selected': 'auto' if ctx.config.server_host == '' else ctx.config.server_host,  # "auto" as default
+                'available': is_server_available(ctx.config.server_host)
             }
             res = {
                 'server': server,
-                'promoter': g.promoter
+                'promoter': ctx.promoter
             }
         elif reqs['cmd'] == ['set']:
             if 'server' in self.postvars:
@@ -472,13 +474,13 @@ class ControlHandler(http_server.HttpServerHandler):
                 server = '' if server == 'auto' else server
 
                 if is_server_available(server):
-                    if server != g.config.server_host:
+                    if server != ctx.config.server_host:
                         xlog.info("change server to %s", server)
-                        g.server_host = g.config.server_host = server
-                        g.server_port = g.config.server_port = 443
-                        g.config.save()
+                        ctx.server_host = ctx.config.server_host = server
+                        ctx.server_port = ctx.config.server_port = 443
+                        ctx.config.save()
 
-                        _start_background_task("session_reset", g.session.reset)
+                        _start_background_task("session_reset", ctx.session.reset)
 
                     res = {"res": "success"}
                 else:
@@ -501,22 +503,22 @@ class ControlHandler(http_server.HttpServerHandler):
             })
 
         plan = self.postvars['plan']
-        if plan not in g.plans:
+        if plan not in ctx.plans:
             xlog.warn("x_tunnel order plan %s not support", plan)
             return self.response_json({
                 "res": "fail",
                 "reason": "plan %s not support" % plan
             })
 
-        res, info = proxy_session.call_api("/order", {
-            "account": g.config.login_account,
-            "password": g.config.login_password,
+        res, info = api_client.call_api("/order", {
+            "account": ctx.config.login_account,
+            "password": ctx.config.login_password,
             "product": "x_tunnel",
             "plan": plan
         })
         if not res:
             xlog.warn("order fail:%s", info)
-            _start_background_task("update_quota_loop", proxy_session.update_quota_loop)
+            _start_background_task("update_quota_loop", api_client.update_quota_loop)
             return self.response_json({"res": "fail", "reason": info})
 
         self.response_json({"res": "success"})
@@ -526,7 +528,7 @@ class ControlHandler(http_server.HttpServerHandler):
         amount = float(self.postvars['amount'])
         transfer_type = self.postvars['transfer_type']
         if transfer_type == 'balance':
-            if amount > g.balance:
+            if amount > ctx.balance:
                 reason = "balance not enough"
                 xlog.warn("transfer fail:%s", reason)
                 return self.response_json({"res": "fail", "reason": reason})
@@ -539,15 +541,15 @@ class ControlHandler(http_server.HttpServerHandler):
             return self.response_json({"res": "fail", "reason": reason})
 
         req_info = {
-            "account": g.config.login_account,
-            "password": g.config.login_password,
+            "account": ctx.config.login_account,
+            "password": ctx.config.login_password,
             "transfer_type": transfer_type,
             "end_time": end_time,
             "to_account": to_account,
             "amount": amount
         }
 
-        res, info = proxy_session.call_api("/transfer", req_info)
+        res, info = api_client.call_api("/transfer", req_info)
         if not res:
             xlog.warn("transfer fail:%s", info)
             return self.response_json({
@@ -562,14 +564,14 @@ class ControlHandler(http_server.HttpServerHandler):
         reqs = parse_qs(req, keep_blank_values=True)
 
         req_info = {
-            "account": g.config.login_account,
-            "password": g.config.login_password,
+            "account": ctx.config.login_account,
+            "password": ctx.config.login_password,
             "start": int(reqs['start'][0]),
             "end": int(reqs['end'][0]),
             "limit": int(reqs['limit'][0])
         }
 
-        res, info = proxy_session.call_api("/get_history", req_info)
+        res, info = api_client.call_api("/get_history", req_info)
         if not res:
             xlog.warn("get history fail:%s", info)
             return self.response_json({
@@ -582,8 +584,8 @@ class ControlHandler(http_server.HttpServerHandler):
         })
 
     def req_status(self):
-        res = g.session.get_stat()
-        res["bind_port"] = g.bind_port
+        res = ctx.session.get_stat()
+        res["bind_port"] = ctx.bind_port
 
         self.response_json({
             "res": "success",

@@ -14,7 +14,106 @@ from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
 import utils
-from . import base_container
+
+
+class WriteBuffer:
+    def __init__(self, s: Optional[bytes] = None) -> None:
+        if isinstance(s, bytes):
+            self.string_len: int = len(s)
+            self.buffer_list: list[bytes] = [s]
+        elif s is None:
+            self.reset()
+        else:
+            raise Exception("WriteBuffer init not bytes or None")
+
+    def reset(self) -> None:
+        self.buffer_list = []
+        self.string_len = 0
+
+    def __len__(self) -> int:
+        return self.string_len
+
+    def __add__(self, other: Union[bytes, WriteBuffer]) -> WriteBuffer:
+        self.append(other)
+        return self
+
+    def insert(self, s: Union[bytes, WriteBuffer]) -> None:
+        if isinstance(s, WriteBuffer):
+            self.buffer_list = s.buffer_list + self.buffer_list
+            self.string_len += s.string_len
+        elif isinstance(s, bytes):
+            self.buffer_list.insert(0, s)
+            self.string_len += len(s)
+        else:
+            raise Exception("WriteBuffer insert not bytes or WriteBuffer")
+
+    def append(self, s: Union[bytes, WriteBuffer]) -> None:
+        if isinstance(s, WriteBuffer):
+            self.buffer_list.extend(s.buffer_list)
+            self.string_len += s.string_len
+        elif isinstance(s, bytes):
+            self.buffer_list.append(s)
+            self.string_len += len(s)
+        else:
+            raise Exception("WriteBuffer append not bytes or WriteBuffer")
+
+    def to_bytes(self) -> bytes:
+        return b"".join(self.buffer_list)
+
+    def __bytes__(self) -> bytes:
+        return self.to_bytes()
+
+    def __str__(self) -> str:
+        return self.to_bytes().decode("ascii", errors="replace")
+
+
+class ReadBuffer:
+    def __init__(self, buf, begin: int = 0, size: Optional[int] = None) -> None:
+        if isinstance(buf, ReadBuffer):
+            buf = buf.to_bytes()
+            if begin == 0:
+                begin = 0
+        buf_len = len(buf)
+        if size is None:
+            size = buf_len - begin
+        self.buf: bytes = buf
+        self.begin: int = begin
+        self.size: int = size
+
+    def __len__(self) -> int:
+        return self.size
+
+    def get(self, size: Optional[int] = None) -> bytes:
+        if size is None:
+            size = self.size
+        if size > self.size:
+            size = self.size
+        data = self.buf[self.begin:self.begin + size]
+        self.begin += size
+        self.size -= size
+        return data
+
+    def get_buf(self, size: Optional[int] = None) -> ReadBuffer:
+        if size is None:
+            size = self.size
+        if size > self.size:
+            size = self.size
+        new_buf = ReadBuffer(self.buf, self.begin, size)
+        self.begin += size
+        self.size -= size
+        return new_buf
+
+    def get_all(self) -> bytes:
+        return self.get(self.size)
+
+    def to_bytes(self) -> bytes:
+        return self.buf[self.begin:self.begin + self.size]
+
+    def __bytes__(self) -> bytes:
+        return self.to_bytes()
+
+    def __str__(self) -> str:
+        return self.to_bytes().decode("ascii", errors="replace")
 
 
 class AsyncWaitQueue:
@@ -63,8 +162,8 @@ class AsyncSendBuffer:
         self._lock: asyncio.Lock = asyncio.Lock()
         self.head_sn: int = 1
         self.tail_sn: int = 1
-        self._block_list: Dict[int, base_container.WriteBuffer] = {}
-        self._last_block: base_container.WriteBuffer = base_container.WriteBuffer()
+        self._block_list: Dict[int, WriteBuffer] = {}
+        self._last_block: WriteBuffer = WriteBuffer()
         self.last_put_time: float = time.time()
     
     async def add(self, data: bytes) -> None:
@@ -76,12 +175,12 @@ class AsyncSendBuffer:
             self._last_block.append(data)
             while len(self._last_block) > self.max_payload:
                 block_data = self._last_block.to_bytes()[:self.max_payload]
-                self._block_list[self.head_sn] = base_container.WriteBuffer(block_data)
+                self._block_list[self.head_sn] = WriteBuffer(block_data)
                 self.head_sn += 1
                 remaining = self._last_block.to_bytes()[self.max_payload:]
-                self._last_block = base_container.WriteBuffer(remaining)
+                self._last_block = WriteBuffer(remaining)
     
-    async def get(self) -> Tuple[Union[bytes, base_container.WriteBuffer], int]:
+    async def get(self) -> Tuple[Union[bytes, WriteBuffer], int]:
         async with self._lock:
             if self.tail_sn < self.head_sn:
                 data = self._block_list[self.tail_sn]
@@ -94,7 +193,7 @@ class AsyncSendBuffer:
             if len(self._last_block) > 0:
                 data = self._last_block
                 sn = self.tail_sn
-                self._last_block = base_container.WriteBuffer()
+                self._last_block = WriteBuffer()
                 self.head_sn += 1
                 self.tail_sn += 1
                 self.pool_size -= len(data)
@@ -106,7 +205,7 @@ class AsyncSendBuffer:
         data, sn = await self.get()
         if not data:
             return None
-        if isinstance(data, base_container.WriteBuffer):
+        if isinstance(data, WriteBuffer):
             return data.to_bytes()
         return bytes(data)
     
@@ -116,7 +215,7 @@ class AsyncSendBuffer:
             self.head_sn = 1
             self.tail_sn = 1
             self._block_list = {}
-            self._last_block = base_container.WriteBuffer()
+            self._last_block = WriteBuffer()
     
     def __len__(self) -> int:
         return self.pool_size
@@ -441,7 +540,7 @@ class AsyncConn:
         if self.transferred_close_to_peer:
             return
         
-        buf = base_container.WriteBuffer(struct.pack("<IB", self.next_recv_seq, 1))
+        buf = WriteBuffer(struct.pack("<IB", self.next_recv_seq, 1))
         buf.append(data)
         self.next_recv_seq += 1
         self.received_position += len(data)

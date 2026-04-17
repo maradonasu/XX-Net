@@ -6,9 +6,9 @@ import zlib
 
 import utils
 
-from . import global_var as g
+from .context import ctx
 from . import front_dispatcher
-from . import proxy_session
+from . import api_client
 
 from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
@@ -20,8 +20,8 @@ gzip_decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
 
 def get_auth_str():
     info = {
-        "login_account": g.config.login_account,
-        "login_password": g.config.login_password
+        "login_account": ctx.config.login_account,
+        "login_password": ctx.config.login_password
     }
     json_str = utils.to_bytes(json.dumps(info))
     token = base64.b64encode(json_str)
@@ -29,27 +29,27 @@ def get_auth_str():
 
 
 def get_openai_proxy(get_next_one=False):
-    if get_next_one or not g.openai_proxy_host:
+    if get_next_one or not ctx.openai_proxy_host:
 
-        if not (g.config.login_account and g.config.login_password):
+        if not (ctx.config.login_account and ctx.config.login_password):
             return False
 
         for _ in range(0, 3):
-            res, reason = proxy_session.request_balance(g.config.login_account, g.config.login_password)
+            res, reason = api_client.request_balance(ctx.config.login_account, ctx.config.login_password)
             if not res:
                 xlog.warn("x-tunnel request_balance fail when create_conn:%s", reason)
                 time.sleep(1)
 
-        if not g.openai_proxies:
+        if not ctx.openai_proxies:
             return None
 
-        g.openai_proxy_host = random.choice(g.openai_proxies)
-    return g.openai_proxy_host
+        ctx.openai_proxy_host = random.choice(ctx.openai_proxies)
+    return ctx.openai_proxy_host
 
 
 def handle_openai(method, path, headers, req_body, sock):
-    if not g.openai_auth_str:
-        g.openai_auth_str = get_auth_str()
+    if not ctx.openai_auth_str:
+        ctx.openai_auth_str = get_auth_str()
 
     host = get_openai_proxy()
     if not host:
@@ -57,7 +57,7 @@ def handle_openai(method, path, headers, req_body, sock):
 
     path = utils.to_str(path[7:])
     headers = utils.to_str(headers)
-    headers["Authorization"] = g.openai_auth_str
+    headers["Authorization"] = ctx.openai_auth_str
     del headers["Host"]
     try:
         del headers["Accept-Encoding"]
@@ -74,7 +74,7 @@ def handle_openai(method, path, headers, req_body, sock):
 
             dat = json.loads(data)
             consumed_balance = dat["usage"]["consumed_balance"]
-            g.openai_balance -= consumed_balance
+            ctx.openai_balance -= consumed_balance
         except Exception as e1:
             xlog.exception("cal tokens err:%r", e1)
 

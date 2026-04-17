@@ -13,7 +13,7 @@ if code_dir not in sys.path:
     sys.path.insert(0, code_dir)
 
 from unittest import TestCase
-import x_tunnel.local.base_container as bc
+import x_tunnel.local.async_base_container as bc
 
 class TestWriteBuffer(TestCase):
     def test_init_with_bytes(self):
@@ -117,53 +117,3 @@ class TestReadBuffer(TestCase):
     def test_str_conversion(self):
         rb = bc.ReadBuffer(b"test")
         self.assertEqual(str(rb), "test")
-
-class TestAckPool(TestCase):
-    def test_init(self):
-        ap = bc.AckPool()
-        self.assertEqual(len(ap.ack_buffer), 0)
-
-    def test_put_and_get(self):
-        ap = bc.AckPool()
-        ap.put(b"data1")
-        ap.put(b"data2")
-        data = ap.get()
-        self.assertEqual(len(data), 10)
-        self.assertEqual(data.to_bytes(), b"data1data2")
-
-    def test_get_empty(self):
-        ap = bc.AckPool()
-        data = ap.get()
-        self.assertEqual(len(data), 0)
-
-    def test_reset(self):
-        ap = bc.AckPool()
-        ap.put(b"data")
-        ap.reset()
-        self.assertEqual(len(ap.ack_buffer), 0)
-
-    def test_multiple_gets(self):
-        ap = bc.AckPool()
-        ap.put(b"data1")
-        first = ap.get()
-        self.assertEqual(len(first), 5)
-        
-        ap.put(b"data2")
-        second = ap.get()
-        self.assertEqual(len(second), 5)
-
-class TestWaitQueue(TestCase):
-    def test_init(self):
-        wq = bc.WaitQueue()
-        self.assertTrue(wq.running)
-        self.assertEqual(len(wq.waiters), 0)
-
-    def test_stop(self):
-        wq = bc.WaitQueue()
-        wq.stop()
-        self.assertFalse(wq.running)
-
-    def test_notify_without_waiters(self):
-        wq = bc.WaitQueue()
-        wq.notify()
-        self.assertEqual(len(wq.waiters), 0)

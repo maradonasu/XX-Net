@@ -5,10 +5,13 @@ import subprocess
 import locale
 import json
 
+from dataclasses import dataclass, field
+
 import sys_platform
 from http_client import request
-import config_manager as xconfig
+import config_manager
 from log_buffer import getLogger
+
 xlog = getLogger("launcher")
 
 current_path = os.path.dirname(os.path.abspath(__file__))
@@ -16,71 +19,64 @@ version_path = os.path.abspath(os.path.join(current_path, os.pardir))
 root_path = os.path.abspath(os.path.join(version_path, os.pardir, os.pardir))
 
 import env_info
+
 data_path = env_info.data_path
 config_path = os.path.join(data_path, 'launcher', 'config.json')
 
 
-config = xconfig.Config(config_path)
+@dataclass
+class LauncherConfig:
+    control_ip: str = "127.0.0.1"
+    control_port: int = 8085
+    allowed_refers: list = field(default_factory=lambda: [""])
 
-config.set_var("control_ip", "127.0.0.1")
-config.set_var("control_port", 8085)
-config.set_var("allowed_refers", [""])
+    language: str = ""
+    allow_remote_connect: int = 0
+    show_systray: int = 1
+    show_android_notification: int = 1
+    no_mess_system: int = 0
+    auto_start: int = 0
+    popup_webui: int = 1
+    webui_auth: dict = field(default_factory=dict)
 
-# System config
-config.set_var("language", "")  # en_US,
-config.set_var("allow_remote_connect", 0)
-config.set_var("show_systray", 1)
-config.set_var("show_android_notification", 1)
-config.set_var("no_mess_system", 0)
-config.set_var("auto_start", 0)
-config.set_var("popup_webui", 1)
-config.set_var("webui_auth", {})
+    show_detail: int = 0
+    show_compat_suggest: int = 1
+    proxy_by_app: int = 0
+    enabled_app_list: list = field(default_factory=list)
 
-config.set_var("show_detail", 0)
-config.set_var("show_compat_suggest", 1)
-config.set_var("proxy_by_app", 0)
-config.set_var("enabled_app_list", [])
+    check_update: str = "notice-stable"
+    keep_old_ver_num: int = 1
+    postUpdateStat: str = "noChange"
+    current_version: str = ""
+    ignore_version: str = ""
+    last_run_version: str = ""
+    skip_stable_version: str = ""
+    skip_test_version: str = ""
 
-# version control
-config.set_var("check_update", "notice-stable") # can be: "dont-check", "stable", "notice-stable", "test", "notice-test"
-config.set_var("keep_old_ver_num", 1)
-config.set_var("postUpdateStat", "noChange") # "noChange", "isNew", "isPostUpdate"
-config.set_var("current_version", "")
-config.set_var("ignore_version", "")
-config.set_var("last_run_version", "")
-config.set_var("skip_stable_version", "")
-config.set_var("skip_test_version", "")
+    last_path: str = ""
+    update_uuid: str = ""
 
-# update:
-config.set_var("last_path", "")
-config.set_var("update_uuid", "")
+    clear_cache: int = 0
+    del_win: int = 0
+    del_mac: int = 0
+    del_linux: int = 0
+    del_xtunnel: int = 0
 
-# savedisk
-config.set_var("clear_cache", 0)
-config.set_var("del_win", 0)
-config.set_var("del_mac", 0)
-config.set_var("del_linux", 0)
-config.set_var("del_xtunnel", 0)
+    all_modules: list = field(default_factory=lambda: ["launcher", "x_tunnel"])
+    enable_launcher: int = 1
+    enable_x_tunnel: int = 1
 
-# Module
-config.set_var("all_modules", ["launcher", "x_tunnel"])
-config.set_var("enable_launcher", 1)
-config.set_var("enable_x_tunnel", 1)
+    os_proxy_mode: str = "x_tunnel"
 
-config.set_var("os_proxy_mode", "x_tunnel") # can be: x_tunnel, disable
+    global_proxy_enable: int = 0
+    global_proxy_type: str = "HTTP"
+    global_proxy_host: str = ""
+    global_proxy_port: int = 0
+    global_proxy_username: str = ""
+    global_proxy_password: str = ""
 
-# Proxy
-config.set_var("global_proxy_enable", 0)
-config.set_var("global_proxy_type", "HTTP") # can be: HTTP/ SOCKS4/ SOCKs5
-config.set_var("global_proxy_host", "")
-config.set_var("global_proxy_port", 0)
-config.set_var("global_proxy_username", "")
-config.set_var("global_proxy_password", "")
 
-try:
-    config.load()
-except Exception as e:
-    xlog.warn("loading config e:%r", e)
+config = config_manager.TypedConfig(LauncherConfig, config_path)
 
 app_name = "XX-Net"
 valid_language = ['en_US', 'fa_IR', 'zh_CN', 'ru_RU']
@@ -91,7 +87,6 @@ try:
         app_name = app_info["app_name"]
 except Exception as e:
     print("load app_info except:", e)
-    pass
 
 
 def _get_os_language():
@@ -144,7 +139,6 @@ def _get_os_language():
     else:
         try:
             lang_code, code_page = locale.getdefaultlocale()
-            # ('en_GB', 'cp1252'), en_US,
             return lang_code
         except Exception:
             pass

@@ -11,7 +11,7 @@ import utils
 from log_buffer import getLogger, reset_log_files
 xlog = getLogger("x_tunnel")
 
-from x_tunnel.local import global_var as g
+from x_tunnel.local.context import ctx
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 root_path = os.path.abspath(os.path.join(current_path, os.pardir, os.pardir))
@@ -21,7 +21,7 @@ data_xtunnel_path = os.path.join(data_path, 'x_tunnel')
 
 def sleep(t):
     end_time = time.time() + t
-    while g.running:
+    while ctx.running:
         if time.time() > end_time:
             return
 
@@ -159,18 +159,18 @@ def pack_logs(max_size=10 * 1024 * 1024):
 
 
 def upload_logs_thread():
-    sleep(g.config.delay_collect_log)
-    while g.running:
-        if not g.running or not g.server_host or not g.session or g.session.last_receive_time == 0:
+    sleep(ctx.config.delay_collect_log)
+    while ctx.running:
+        if not ctx.running or not ctx.server_host or not ctx.session or ctx.session.last_receive_time == 0:
             time.sleep(10)
         else:
             break
 
-    sleep(g.config.delay_collect_log2)
-    if not g.running:
+    sleep(ctx.config.delay_collect_log2)
+    if not ctx.running:
         return
 
-    session_id = utils.to_str(g.session.session_id)
+    session_id = utils.to_str(ctx.session.session_id)
     data = pack_logs()
     if data:
         upload(session_id, data)
@@ -178,7 +178,7 @@ def upload_logs_thread():
 
 def upload(session_id, data):
     try:
-        content, status, response = g.http_client.request(method="POST", host=g.server_host,
+        content, status, response = ctx.http_client.request(method="POST", host=ctx.server_host,
                                                           path="/upload_logs?session_id=%s" % session_id,
                                                           data=data,
                                                           headers={"Content-Length": str(len(data))})

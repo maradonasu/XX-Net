@@ -7,7 +7,7 @@ class TestNoBareExcept(TestCase):
     """Phase 3.3: Verify no bare except: in project code (excluding vendored libs)."""
 
     VENDORED_DIRS = {
-        'hyper', 'scrypto', 'idna', 'boringssl',
+        'scrypto', 'idna',
         '__pycache__', 'tests',
     }
 
@@ -52,33 +52,25 @@ class TestTypeAnnotations(TestCase):
         self.assertIn('def merge_two_dict(x: dict', content)
 
     def test_base_container_has_type_annotations(self):
-        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'base_container.py')
+        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'async_base_container.py')
         with open(fpath, 'r', encoding='utf-8') as f:
             content = f.read()
-        self.assertIn('from __future__ import annotations', content)
         self.assertIn('from typing import', content)
-        self.assertIn('def __init__(self, s: Optional[bytes]', content)
-        self.assertIn('def __init__(self, session: Any, xlog: Any)', content)
-
-    def test_proxy_handler_has_type_annotations(self):
-        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'proxy_handler.py')
-        with open(fpath, 'r', encoding='utf-8') as f:
-            content = f.read()
-        self.assertIn('from __future__ import annotations', content)
-        self.assertIn('from typing import', content)
-        self.assertIn('def netloc_to_host_port(netloc: ', content)
-        self.assertIn('def __init__(self, sock: socket.socket', content)
-        self.assertIn('def read_bytes(self, size: int)', content)
+        self.assertIn('class WriteBuffer:', content)
+        self.assertIn('class ReadBuffer:', content)
+        self.assertIn('def __init__(self, s: Optional[bytes] = None)', content)
 
     def test_proxy_session_has_type_annotations(self):
-        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'proxy_session.py')
+        fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'async_proxy_session.py')
         with open(fpath, 'r', encoding='utf-8') as f:
             content = f.read()
         self.assertIn('from typing import', content)
-        self.assertIn('def encrypt_data(data: ', content)
-        self.assertIn('def decrypt_data(data: ', content)
-        self.assertIn('def create_conn(self, sock: socket.socket', content)
-        self.assertIn('def login_session(self) -> bool', content)
+        
+        api_fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'api_client.py')
+        with open(api_fpath, 'r', encoding='utf-8') as f:
+            api_content = f.read()
+        self.assertIn('def encrypt_data(data: ', api_content)
+        self.assertIn('def decrypt_data(data: ', api_content)
 
     def test_connect_creator_has_type_annotations(self):
         fpath = os.path.join(self._code_root(), 'lib', 'noarch', 'front_base', 'connect_creator.py')
@@ -110,13 +102,22 @@ class TestTypeAnnotations(TestCase):
         self.assertIn('ctx: _GlobalVarProxy', content)
         self.assertIn('_context: XTunnelContext', content)
 
-    def test_global_var_is_shim(self):
+    def test_global_var_deleted(self):
         fpath = os.path.join(self._code_root(), 'x_tunnel', 'local', 'global_var.py')
-        self.assertTrue(os.path.exists(fpath))
-        with open(fpath, 'r', encoding='utf-8') as f:
-            content = f.read()
-        self.assertIn('from .context import ctx', content)
-        self.assertIn('sys.modules[__name__] = ctx', content)
+        self.assertFalse(os.path.exists(fpath), "global_var.py should be deleted")
+
+    def test_context_is_singleton(self):
+        import sys
+        code_root = self._code_root()
+        if code_root not in sys.path:
+            sys.path.insert(0, code_root)
+        lib_path = os.path.join(code_root, 'lib', 'noarch')
+        if lib_path not in sys.path:
+            sys.path.insert(0, lib_path)
+        from x_tunnel.local.context import ctx, _context, XTunnelContext, _GlobalVarProxy
+        self.assertIsInstance(ctx, _GlobalVarProxy)
+        self.assertIsInstance(_context, XTunnelContext)
+        self.assertIs(ctx._ctx, _context)
 
     def test_ctx_and_g_share_same_context(self):
         import sys
@@ -128,17 +129,13 @@ class TestTypeAnnotations(TestCase):
             sys.path.insert(0, lib_path)
 
         from x_tunnel.local.context import ctx, _context
-        from x_tunnel.local import global_var as g
 
-        g.test_di_attr = 'via_g'
-        self.assertEqual(ctx.test_di_attr, 'via_g')
-        self.assertEqual(_context.test_di_attr, 'via_g')
+        ctx.test_di_attr = 'via_ctx'
+        self.assertEqual(_context.test_di_attr, 'via_ctx')
 
-        ctx.test_di_attr2 = 'via_ctx'
-        self.assertEqual(g.test_di_attr2, 'via_ctx')
-        self.assertEqual(_context.test_di_attr2, 'via_ctx')
+        _context.test_di_attr2 = 'via_context'
+        self.assertEqual(ctx.test_di_attr2, 'via_context')
 
-        self.assertIs(g._ctx, _context)
         self.assertIs(ctx._ctx, _context)
 
         del _context.test_di_attr
