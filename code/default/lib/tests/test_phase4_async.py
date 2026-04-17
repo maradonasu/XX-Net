@@ -57,9 +57,12 @@ class TestAsyncLoop(TestCase):
             await asyncio.sleep(0.05)
             results.append("done")
 
-        async_loop.create_task(background_work())
-        time.sleep(0.2)
-        self.assertIn("done", results)
+        async def waiter():
+            task = async_loop.create_task(background_work())
+            await asyncio.wait_for(task, timeout=2)
+            self.assertIn("done", results)
+
+        async_loop.run_async(waiter(), timeout=5)
 
     def test_run_sync_in_async(self):
         import async_loop

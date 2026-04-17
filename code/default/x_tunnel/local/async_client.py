@@ -215,7 +215,9 @@ class SessionProxyHandler(AsyncSocks5Handler):
             return_exceptions=True,
         )
         
-        if conn and hasattr(conn, 'stop_async'):
+        if conn:
+            if not conn.transferred_close_to_peer:
+                await conn.transfer_peer_close("relay_end")
             await conn.stop_async("relay_end")
 
     async def _start_relay_and_conn(self, local_sock: socket.socket, conn: Any) -> None:
@@ -373,6 +375,16 @@ class SessionProxySocks5Server(AsyncSocks5Server):
 
 async def _async_main(config_args):
     loop = asyncio.get_event_loop()
+
+    def _exception_handler(loop, context):
+        exception = context.get('exception')
+        if isinstance(exception, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+            return
+        if exception and isinstance(exception, OSError) and exception.winerror in (10054, 10053, 10038):
+            return
+        loop.default_exception_handler(context)
+
+    loop.set_exception_handler(_exception_handler)
 
     g.xxnet_version = xxnet_version()
     g.client_uuid = get_launcher_uuid()

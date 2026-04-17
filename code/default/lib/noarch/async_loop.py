@@ -10,8 +10,8 @@ allowing gradual migration from threading-based to asyncio-based I/O.
 from __future__ import annotations
 
 import asyncio
-import threading
 import functools
+import threading
 from typing import Any, Coroutine, Optional, TypeVar
 
 T = TypeVar('T')
@@ -23,15 +23,18 @@ _running: bool = False
 
 def get_loop() -> asyncio.AbstractEventLoop:
     global _loop
-    if _loop is None or _loop.is_closed():
+    if _loop is None or _loop.is_closed() or not _loop.is_running():
         start()
     return _loop
 
 
 def start() -> None:
     global _loop, _thread, _running
-    if _running and _loop and not _loop.is_closed():
+    if _running and _loop and not _loop.is_closed() and _loop.is_running():
         return
+
+    if _loop and not _loop.is_closed():
+        _loop.close()
 
     _loop = asyncio.new_event_loop()
     _running = True

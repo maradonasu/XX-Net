@@ -183,41 +183,38 @@ class TestAsyncBlockReceivePool(TestCase):
 
 
 class TestAsyncEndToEnd(TestCase):
-    def test_socketpair_communication(self):
-        from x_tunnel.local.async_base_container import AsyncConnectionPipe, AsyncConn
+    def test_conn_on_data_received_flow(self):
+        from x_tunnel.local.async_base_container import AsyncConn
         
         async def do_test():
+            received_cmds = []
+            
             class FakeSession:
                 def __init__(self):
                     self.connection_pipe = None
-                    self.received_data = []
                 
-                async def on_conn_data(self, conn_id, data):
-                    self.received_data.append(data)
+                async def send_conn_data(self, conn_id, data):
+                    received_cmds.append((conn_id, data))
                 
                 async def remove_conn_async(self, conn_id):
                     pass
             
             session = FakeSession()
-            pipe = AsyncConnectionPipe(session, None)
-            await pipe.start()
+            conn = AsyncConn(session, 1, None, "test", 80, None)
+            conn.next_recv_seq = 1
             
-            local_sock, remote_sock = socket.socketpair()
-            remote_sock.setblocking(False)
+            await conn.on_data_received(b"hello async")
             
-            conn = AsyncConn(session, 1, remote_sock, "test", 80, None)
-            session.connection_pipe = pipe
+            self.assertEqual(len(received_cmds), 1)
+            conn_id, data = received_cmds[0]
+            self.assertEqual(conn_id, 1)
+            raw = bytes(data)
+            self.assertGreater(len(raw), 5)
             
-            await pipe.add_sock(remote_sock, conn)
+            cmd_id = raw[4]
+            self.assertEqual(cmd_id, 1)
             
-            local_sock.send(b"hello async")
-            await asyncio.sleep(0.2)
-            
-            local_sock.close()
-            await asyncio.sleep(0.2)
-            
-            await pipe.stop()
-            
-            self.assertEqual(session.received_data, [b"hello async"])
+            payload = raw[5:]
+            self.assertEqual(payload, b"hello async")
         
         async_loop.run_async(do_test(), timeout=10)

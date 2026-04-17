@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 # coding:utf-8
-"""
-Async Proxy Session for X-Tunnel.
-Full async version of ProxySession with complete protocol handling.
-"""
 
 from __future__ import annotations
 
@@ -21,10 +17,11 @@ import utils
 import encrypt
 from . import global_var as g
 from .async_base_container import (
-    AsyncWaitQueue, AsyncSendBuffer, AsyncConnectionPipe, 
+    AsyncWaitQueue, AsyncSendBuffer, AsyncConnectionPipe,
     AsyncConn, AsyncBlockReceivePool
 )
 from . import base_container
+from . import proxy_session
 
 
 def encrypt_data(data: Union[bytes, bytearray]) -> bytes:
@@ -34,7 +31,7 @@ def encrypt_data(data: Union[bytes, bytearray]) -> bytes:
 
 
 def decrypt_data(data: Union[bytes, memoryview]) -> bytes:
-    if g.config and g.config.encrypt_data:
+    if g.config and getattr(g.config, 'encrypt_data', None):
         if isinstance(data, memoryview):
             data = data.tobytes()
         return encrypt.Encryptor(g.config.encrypt_password, g.config.encrypt_method).decrypt(data)
@@ -58,50 +55,75 @@ class AsyncReceiveProcess:
         self.xlog = logger
         self._lock: asyncio.Lock = asyncio.Lock()
         
-        self.received: Dict[int, bytes] = {}
         self.next_sn: int = 1
         self.block_list: List[int] = []
-        self.timeout_list: Dict[int, float] = {}
+        self.timeout_list: Dict[int, dict] = {}
     
     async def put(self, sn: int, data: bytes) -> None:
         async with self._lock:
-            if sn in self.received:
+            if sn in self.timeout_list:
+                del self.timeout_list[sn]
+            
+            if sn < self.next_sn:
                 return
             
-            self.received[sn] = data
-            
-            while self.next_sn in self.received:
-                payload = self.received[self.next_sn]
-                del self.received[self.next_sn]
-                self.next_sn += 1
+            if sn > self.next_sn:
+                if sn in self.block_list:
+                    return
+                self.block_list.append(sn)
                 try:
-                    await self._handler(payload)
+                    await self._handler(data)
                 except Exception as e:
                     self.xlog.warn("receive handler error: %r", e)
+                return
+            
+            try:
+                await self._handler(data)
+            except Exception as e:
+                self.xlog.warn("receive handler error: %r", e)
+            self.next_sn += 1
+            
+            while self.next_sn in self.block_list:
+                self.block_list.remove(self.next_sn)
+                self.next_sn += 1
     
     def is_received(self, sn: int) -> bool:
-        return sn < self.next_sn or sn in self.received
+        return sn < self.next_sn or sn in self.block_list
     
     async def mark_sn_timeout(self, sn: int, t: float, server_time: float) -> None:
         async with self._lock:
             if sn not in self.timeout_list:
-                self.timeout_list[sn] = t
+                self.xlog.warn("mark_sn_timeout sn:%d t:%f", sn, server_time - t)
+                self.timeout_list[sn] = {"server_send_time": t}
+            elif t > self.timeout_list[sn]["server_send_time"]:
+                self.timeout_list[sn]["server_send_time"] = t
     
     async def get_timeout_list(self, server_time: float, timeout: float) -> List[int]:
         result = []
         async with self._lock:
-            for sn, t in list(self.timeout_list.items()):
-                if server_time - t > timeout:
-                    result.append(sn)
-                    del self.timeout_list[sn]
+            for sn, info in list(self.timeout_list.items()):
+                if server_time - info["server_send_time"] < timeout:
+                    continue
+                if server_time - info.get("retry_time", server_time) < timeout:
+                    continue
+                self.xlog.warn("get_timeout_list sn:%d sent:%f retry:%f",
+                               sn, server_time - info["server_send_time"],
+                               server_time - info.get("retry_time", server_time))
+                info["retry_time"] = server_time
+                result.append(sn)
         return result
     
     async def reset(self) -> None:
         async with self._lock:
-            self.received = {}
             self.next_sn = 1
             self.block_list = []
             self.timeout_list = {}
+    
+    def status(self) -> str:
+        out = "AsyncReceiveProcess:\n"
+        out += f" next_sn: {self.next_sn}\n"
+        out += f" block_list: {self.block_list}\n"
+        return out
 
 
 class AsyncProxySession:
@@ -113,7 +135,7 @@ class AsyncProxySession:
         windows_ack = 40
         send_delay = 100
         ack_delay = 100
-        resend_timeout = 10
+        resend_timeout = 10000
         concurent_thread_num = 4
         min_on_road = 2
         roundtrip_timeout = 30
@@ -155,7 +177,7 @@ class AsyncProxySession:
         self.windows_ack = windows_ack
         self.send_delay = send_delay / 1000.0
         self.ack_delay = ack_delay / 1000.0
-        self.resend_timeout = resend_timeout
+        self.resend_timeout = resend_timeout / 1000.0
         self.concurent_thread_num = concurent_thread_num
         self.min_on_road = min_on_road
         self.roundtrip_timeout = roundtrip_timeout
@@ -197,6 +219,8 @@ class AsyncProxySession:
         self.target_on_roads: int = 0
         self.on_road_num: int = 0
         self.oldest_received_time: float = 0
+        
+        self.last_state = {"timeout": 0}
     
     async def start(self) -> bool:
         async with self.lock:
@@ -216,9 +240,14 @@ class AsyncProxySession:
             self.oldest_received_time = 0
             self.target_on_roads = 0
             self.on_road_num = 0
+            self.server_time_offset = 0
+            self.server_time_deviation = 9999
             
             self.traffic_upload = 0
             self.traffic_download = 0
+            self.last_traffic_upload = 0
+            self.last_traffic_download = 0
+            self.last_traffic_reset_time = time.time()
             
             if not await self.login_session():
                 xlog.warn("AsyncProxySession login failed")
@@ -227,6 +256,8 @@ class AsyncProxySession:
             self.running = True
             
             self.wait_queue.reset()
+            await self.send_buffer.reset()
+            await self.receive_process.reset()
             
             for i in range(self.concurent_thread_num):
                 task = asyncio.create_task(self.round_trip_worker(i), name=f"roundtrip_{i}")
@@ -269,7 +300,7 @@ class AsyncProxySession:
     def is_idle(self) -> bool:
         return time.time() - self.last_send_time > 60
     
-    async def traffic_speed_calculation(self) -> None:
+    def traffic_speed_calculation(self) -> None:
         now = time.time()
         time_go = now - self.last_traffic_reset_time
         if time_go > 0.5:
@@ -279,6 +310,14 @@ class AsyncProxySession:
             self.last_traffic_reset_time = now
             self.last_traffic_upload = self.traffic_upload
             self.last_traffic_download = self.traffic_download
+    
+    def trigger_more(self) -> None:
+        running_num = self.concurent_thread_num - self.wait_queue.waiters
+        action_num = self.target_on_roads - running_num
+        if action_num <= 0:
+            return
+        for _ in range(action_num):
+            self.wait_queue.notify()
     
     async def round_trip_worker(self, work_id: int) -> None:
         xlog.debug("round_trip_worker %d started", work_id)
@@ -350,6 +389,7 @@ class AsyncProxySession:
             if send_data_len > 0:
                 request_timeout = min(request_timeout, self.send_timeout_retry + self.network_timeout)
             
+            upload_post_data2 = bytearray(upload_post_data)
             loop = asyncio.get_event_loop()
             content, status, response = await loop.run_in_executor(
                 None,
@@ -357,14 +397,14 @@ class AsyncProxySession:
                     method="POST",
                     host=g.server_host,
                     path="/data?tid=%d" % transfer_no,
-                    data=bytearray(upload_post_data),
-                    headers={"Content-Length": str(len(upload_post_data))},
+                    data=upload_post_data2,
+                    headers={"Content-Length": str(len(upload_post_data2))},
                     timeout=request_timeout
                 )
             )
             
-            traffic = len(upload_post_data) + len(content) + 645
-            self.traffic_upload += len(upload_post_data) + 645
+            traffic = len(upload_post_data2) + len(content) + 645
+            self.traffic_upload += len(upload_post_data2) + 645
             self.traffic_download += len(content)
             if hasattr(g, 'quota'):
                 g.quota -= traffic
@@ -383,13 +423,17 @@ class AsyncProxySession:
             async with self.lock:
                 self.on_road_num -= 1
         
+        if hasattr(g, 'stat'):
+            g.stat["roundtrip_num"] += 1
         time_now = time.time()
         roundtrip_time = time_now - start_time
         
         if status == 521:
-            xlog.warn("X-tunnel server is down")
+            xlog.warn("X-tunnel server is down, try get new server.")
             g.server_host = None
             await self.stop()
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, proxy_session.login_process)
             return False
         
         if status != 200:
@@ -400,8 +444,17 @@ class AsyncProxySession:
             await asyncio.sleep(1)
             return False
         
-        if len(content) < 6:
-            xlog.warn("roundtrip content too short:%d", len(content))
+        content_length = 0
+        if response and hasattr(response, 'headers'):
+            cl = response.headers.get(b"Content-Length", b"0")
+            try:
+                content_length = int(cl)
+            except Exception:
+                pass
+        content_len = len(content)
+        if content_len < 6 or (content_length and content_length != content_len):
+            xlog.warn("roundtrip time:%f transfer_no:%d send:%d recv:%d Head:%d",
+                      roundtrip_time, transfer_no, send_data_len, content_len, content_length)
             async with self.lock:
                 if transfer_no in self.transfer_list:
                     self.transfer_list[transfer_no]["stat"] = "timeout"
@@ -412,8 +465,9 @@ class AsyncProxySession:
             payload = base_container.ReadBuffer(content)
             
             magic, version, pack_type = struct.unpack("<cBB", payload.get(3))
-            if magic != b"P" or pack_type not in [2, 3]:
-                xlog.warn("invalid response head")
+            if magic != b"P" or version != protocol_version or pack_type not in [2, 3]:
+                xlog.warn("invalid response head magic:%s version:%d pack_type:%d",
+                          magic, version, pack_type)
                 async with self.lock:
                     if transfer_no in self.transfer_list:
                         self.transfer_list[transfer_no]["stat"] = "timeout"
@@ -427,6 +481,13 @@ class AsyncProxySession:
                 if error_code == 1:
                     xlog.warn("no quota")
                     await self.stop()
+                    return False
+                elif error_code == 2:
+                    xlog.warn("roundtrip time:%f transfer_no:%d send:%d recv:%d unpack_error:%s",
+                              roundtrip_time, transfer_no, send_data_len, content_len, message)
+                    async with self.lock:
+                        if transfer_no in self.transfer_list:
+                            self.transfer_list[transfer_no]["stat"] = "timeout"
                     return False
                 elif error_code == 3:
                     xlog.warn("session not exist, reset")
@@ -442,11 +503,50 @@ class AsyncProxySession:
                 rcvd_no_len, sent_no_len, unack_snd_sn_len, ext_len \
                 = struct.unpack("<dIIIIIIII", payload.get(40))
             
+            head_len = content_len - data_len - ack_len - rcvd_no_len - sent_no_len - unack_snd_sn_len - ext_len
+            if head_len < 3 + 40:
+                xlog.warn("no:%d recv_len:%d data:%d ack:%d head:%d",
+                          transfer_no, content_len, data_len, ack_len, head_len)
+                async with self.lock:
+                    if transfer_no in self.transfer_list:
+                        self.transfer_list[transfer_no]["stat"] = "timeout"
+                return False
+            
             data = payload.get_buf(data_len)
             ack = payload.get_buf(ack_len)
             rcvd_no_list = payload.get_buf(rcvd_no_len)
             sent_no_list = payload.get_buf(sent_no_len)
             unack_snd_sn = payload.get_buf(unack_snd_sn_len)
+            ext = payload.get_buf(ext_len)
+            
+            if len(payload) > 32:
+                checksum_str = utils.to_str(payload.get(32).tobytes())
+                checksum = hashlib.md5(bytes(content[:-32])).hexdigest()
+                if checksum != checksum_str:
+                    xlog.warn("checksum error:%s %s", checksum_str, checksum)
+                    async with self.lock:
+                        if transfer_no in self.transfer_list:
+                            self.transfer_list[transfer_no]["stat"] = "timeout"
+                    return False
+            
+            rtt = roundtrip_time - (time_cost / 1000.0)
+            speed = (send_data_len + content_len + 400) / rtt if rtt > 0 else 0
+            
+            if roundtrip_time < self.server_time_deviation:
+                new_offset = server_time - time_now
+                xlog.info("adjust server time offset:%f->%f, deviation:%f->%f",
+                          self.server_time_offset, new_offset,
+                          self.server_time_deviation, roundtrip_time)
+                self.server_time_offset = new_offset
+                self.server_time_deviation = roundtrip_time
+            
+            if rtt > 8000 and hasattr(g, 'stat'):
+                g.stat["slow_roundtrip"] += 1
+            
+            xlog.debug("no:%d road_time:%f snd:%d rcv:%d s_pool:%d on_road:%d target:%d speed:%d",
+                       transfer_no, rtt, send_data_len, content_len,
+                       server_send_pool_size, self.on_road_num,
+                       self.target_on_roads, speed)
             
             self.last_receive_time = time.time()
             
@@ -455,20 +555,16 @@ class AsyncProxySession:
                     del self.transfer_list[transfer_no]
             
             await self.round_trip_process(data, ack, rcvd_no_list, sent_no_list, unack_snd_sn, server_time)
-            
-            rtt = roundtrip_time - (time_cost / 1000.0)
-            if roundtrip_time < self.server_time_deviation:
-                new_offset = server_time - time_now
-                self.server_time_offset = new_offset
-                self.server_time_deviation = roundtrip_time
+            await self.check_upload_not_acked(server_time)
             
             if len(self.conn_list) == 0:
                 self.target_on_roads = 0
-            elif len(content) >= self.max_payload:
+            elif content_len >= self.max_payload:
                 self.target_on_roads = min(self.concurent_thread_num - self.min_on_road, self.target_on_roads + 10)
             elif data_len <= 200:
                 self.target_on_roads = max(self.min_on_road, self.target_on_roads - 5)
             
+            self.trigger_more()
             self.wait_queue.notify()
             return True
             
@@ -479,21 +575,54 @@ class AsyncProxySession:
                     self.transfer_list[transfer_no]["stat"] = "timeout"
             return False
     
+    async def check_upload_not_acked(self, server_time: float) -> None:
+        server_local_time = server_time - self.server_time_offset
+        if self.server_time_deviation > self.server_time_max_deviation:
+            return
+        
+        timeout_num = 0
+        async with self.lock:
+            for no, data_info in self.transfer_list.items():
+                if data_info["stat"] == "timeout":
+                    continue
+                
+                if not data_info["server_received"] and \
+                        server_local_time - data_info["start_time"] > self.send_timeout_retry:
+                    data_info["stat"] = "timeout"
+                    xlog.warn("check_upload_not_acked found transfer_no:%d upload timeout:%f",
+                              no, server_local_time - data_info["start_time"])
+                    timeout_num += 1
+                    continue
+                
+                if data_info["server_sent"] and server_time - data_info["server_sent"] > self.send_timeout_retry:
+                    data_info["stat"] = "timeout"
+                    xlog.warn("check_upload_not_acked found transfer_no:%d down timeout:%f",
+                              no, server_time - data_info["server_sent"])
+                    timeout_num += 1
+        
+        if timeout_num:
+            self.target_on_roads = min(self.concurent_thread_num - self.min_on_road, self.target_on_roads + timeout_num)
+            self.trigger_more()
+    
     async def get_upload_data(self, work_id: int) -> Optional[Dict[str, Any]]:
         time_now = time.time()
         
         async with self.lock:
-            for sn, data_info in list(self.transfer_list.items()):
+            wrong_sn = []
+            for sn, data_info in self.transfer_list.items():
                 if data_info.get("session_id") != self.session_id:
-                    del self.transfer_list[sn]
+                    wrong_sn.append(sn)
                     continue
                 
                 if data_info["stat"] == "timeout":
-                    xlog.warn("retry transfer_no:%d", sn)
+                    xlog.warn("retry transfer_no:%d t:%f", sn, time_now - data_info["start_time"])
                     data_info["stat"] = "retry"
                     data_info["retry"] += 1
                     data_info["start_time"] = time_now
                     return data_info
+            
+            for sn in wrong_sn:
+                del self.transfer_list[sn]
         
         data, ack, download_timeout = await self.get_send_data(work_id)
         
@@ -568,11 +697,12 @@ class AsyncProxySession:
             if pool_size > self.max_payload or \
                (pool_size > 0 and time.time() - self.oldest_received_time > self.send_delay):
                 
-                payload_bytes = await self.send_buffer.get_payload()
-                if payload_bytes:
-                    async with self.lock:
-                        sn = self.last_transfer_no + 1
-                        self.last_transfer_no = sn
+                payload_result, sn = await self.send_buffer.get()
+                if payload_result and sn > 0:
+                    if isinstance(payload_result, base_container.WriteBuffer):
+                        payload_bytes = payload_result.to_bytes()
+                    else:
+                        payload_bytes = bytes(payload_result)
                     
                     self.wait_ack_send_list[sn] = (payload_bytes, time_now)
                     buf.append(struct.pack("<II", sn, len(payload_bytes)))
@@ -614,7 +744,7 @@ class AsyncProxySession:
         buf.insert(struct.pack("<I", len(timeout_list)))
         return buf
     
-    async def round_trip_process(self, data: Any, ack: Any, 
+    async def round_trip_process(self, data: Any, ack: Any,
                                   rcvd_no_list: Any, sent_no_list: Any,
                                   unack_snd_sn: Any, server_time: float) -> None:
         while len(data):
@@ -651,7 +781,7 @@ class AsyncProxySession:
             except Exception as e:
                 xlog.exception("ack_process: %r", e)
     
-    async def process_server_received_transfer_no(self, rcvd_no_list: Any, 
+    async def process_server_received_transfer_no(self, rcvd_no_list: Any,
                                                    sent_no_list: Any, server_time: float) -> None:
         async with self.lock:
             try:
@@ -663,6 +793,18 @@ class AsyncProxySession:
                         info["server_received"] = True
                     if no < server_sent_next_no:
                         info["server_sent"] = server_time
+                
+                server_unordered_received_no_num = struct.unpack("<I", rcvd_no_list.get(4))[0]
+                for i in range(server_unordered_received_no_num):
+                    no, t = struct.unpack("<Id", rcvd_no_list.get(12))
+                    if no in self.transfer_list:
+                        self.transfer_list[no]["server_received"] = t
+                
+                server_unordered_sent_no_num = struct.unpack("<I", sent_no_list.get(4))[0]
+                for i in range(server_unordered_sent_no_num):
+                    no, t = struct.unpack("<Id", sent_no_list.get(12))
+                    if no in self.transfer_list:
+                        self.transfer_list[no]["server_sent"] = t
             except Exception as e:
                 xlog.debug("process_server_received error: %r", e)
     
@@ -705,9 +847,9 @@ class AsyncProxySession:
                         timeout_num += 1
             
             if timeout_num:
-                self.target_on_roads = min(self.concurent_thread_num - self.min_on_road, 
+                self.target_on_roads = min(self.concurent_thread_num - self.min_on_road,
                                           self.target_on_roads + timeout_num)
-                self.wait_queue.notify()
+                self.trigger_more()
     
     async def download_data_processor(self, data: bytes) -> None:
         try:
@@ -720,11 +862,12 @@ class AsyncProxySession:
                     xlog.debug("conn %d not exist", conn_id)
                     continue
                 
-                await self.on_conn_data(conn_id, conn_payload)
+                conn = self.conn_list[conn_id]
+                await conn.put_cmd_data(conn_payload)
         except Exception as e:
             xlog.exception("download_data_processor: %r", e)
     
-    async def create_conn(self, sock: Any, host: Union[str, bytes], port: int, 
+    async def create_conn(self, sock: Any, host: Union[str, bytes], port: int,
                           log: bool = False) -> Optional[int]:
         if not self.running:
             xlog.debug("session not running")
@@ -744,12 +887,13 @@ class AsyncProxySession:
         data = struct.pack("<IBBH", seq, cmd_type, sock_type, len(host)) + host + struct.pack("<H", port)
         await self.send_conn_data(conn_id, data)
         
-        conn = AsyncConn(self, conn_id, sock, host.decode('ascii', errors='replace'), port, xlog)
+        conn = AsyncConn(self, conn_id, sock, host.decode('ascii', errors='replace'), port, xlog,
+                         windows_size=self.windows_size, windows_ack=self.windows_ack, is_client=True)
         async with self.lock:
             self.conn_list[conn_id] = conn
         
         self.target_on_roads = min(self.concurent_thread_num - self.min_on_road, self.target_on_roads + 2)
-        self.wait_queue.notify()
+        self.trigger_more()
         
         await conn.start()
         
@@ -778,12 +922,7 @@ class AsyncProxySession:
                 return
             conn = self.conn_list[conn_id]
         
-        if conn._writer:
-            try:
-                conn._writer.write(data)
-                await conn._writer.drain()
-            except Exception as e:
-                xlog.debug("conn %d write error: %r", conn_id, e)
+        await conn.put_cmd_data(data)
     
     async def remove_conn_async(self, conn_id: int) -> None:
         async with self.lock:
@@ -841,6 +980,8 @@ class AsyncProxySession:
                     )
                 )
                 
+                time_cost = time.time() - start_time
+                
                 if status == 521:
                     g.server_host = None
                     return False
@@ -868,24 +1009,32 @@ class AsyncProxySession:
             info = decrypt_data(content)
             magic, protocol_version, pack_type, res, message_len = struct.unpack("<cBBBH", info[:6])
             message = info[6:]
+            if isinstance(message, memoryview):
+                message = message.tobytes()
             
-            if magic != b"P":
+            protocol_version_expected = g.protocol_version if hasattr(g, 'protocol_version') else 1
+            if magic != b"P" or protocol_version != protocol_version_expected or pack_type != 1:
+                xlog.error("login_session head error: magic:%s version:%d/%d pack_type:%d",
+                           magic, protocol_version, protocol_version_expected, pack_type)
                 return False
             
             if res != 0:
+                g.last_api_error = "session server login fail, code:%d msg:%s" % (res, message)
                 xlog.warn("login fail, res:%d msg:%s", res, message)
                 return False
             
             try:
                 msg_info = json.loads(message)
                 if msg_info.get("full_log"):
+                    xlog.debug("keep full log")
                     keep_log(temp=True)
-            except Exception:
-                pass
+            except Exception as e:
+                xlog.warn("login_session %s json error:%r", message, e)
             
             if hasattr(g, 'http_client') and hasattr(g.http_client, 'set_session_host'):
                 g.http_client.set_session_host(g.server_host)
             
+            g.last_api_error = ""
             xlog.info("login success, session_id: %s", self.session_id)
             return True
         except Exception as e:
@@ -902,18 +1051,28 @@ class AsyncProxySession:
         return json.dumps(data)
     
     def status(self) -> str:
+        self.traffic_speed_calculation()
         out = f"AsyncProxySession:\n"
-        out += f" running: {self.running}\n"
         out += f" session_id: {utils.to_str(self.session_id)}\n"
+        out += f" running: {self.running}\n"
         out += f" connections: {len(self.conn_list)}\n"
+        out += f" last_send_time: {time.time() - self.last_send_time:.1f}s ago\n"
+        out += f" last_receive_time: {time.time() - self.last_receive_time:.1f}s ago\n"
         out += f" upload: {traffic_readable(self.traffic_upload)}\n"
         out += f" download: {traffic_readable(self.traffic_download)}\n"
         out += f" upload_speed: {traffic_readable(self.upload_speed)}/s\n"
         out += f" download_speed: {traffic_readable(self.download_speed)}/s\n"
         out += f" target_on_roads: {self.target_on_roads}\n"
         out += f" on_road_num: {self.on_road_num}\n"
+        out += f" transfer_list: {len(self.transfer_list)}\n"
         out += f" server_time_offset: {self.server_time_offset}\n"
+        out += f" server_time_deviation: {self.server_time_deviation}\n"
+        out += self.wait_queue.status() if hasattr(self.wait_queue, 'status') else ""
+        out += self.send_buffer.status()
+        out += self.receive_process.status()
         out += self.connection_pipe.status()
+        for conn_id in self.conn_list:
+            out += self.conn_list[conn_id].status()
         return out
     
     async def check_upload(self) -> Optional[bool]:
@@ -921,6 +1080,21 @@ class AsyncProxySession:
             self.wait_queue.notify()
             return True
         return None
+    
+    def get_stat(self, stat_type: str = "second") -> Dict[str, Any]:
+        self.traffic_speed_calculation()
+        
+        res = {}
+        res["global"] = {
+            "handle_num": getattr(getattr(g, 'socks5_server', None), 'handler', type('', (), {'handle_num': 0})()).handle_num,
+            "roundtrip_num": getattr(g, 'stat', {}).get("roundtrip_num", 0),
+            "slow_roundtrip": getattr(g, 'stat', {}).get("slow_roundtrip", 0),
+            "timeout_roundtrip": getattr(g, 'stat', {}).get("timeout_roundtrip", 0),
+            "resend": getattr(g, 'stat', {}).get("resend", 0),
+            "speed": "Up: %s/s / Down: %s/s" % (traffic_readable(self.upload_speed), traffic_readable(self.download_speed)),
+            "total_traffics": "Up: %s / Down: %s" % (traffic_readable(self.traffic_upload), traffic_readable(self.traffic_download))
+        }
+        return res
 
 
 _login_lock = asyncio.Lock()
@@ -936,8 +1110,16 @@ async def async_login_process() -> bool:
             return False
         
         if not g.server_host:
-            xlog.debug("no server host")
-            return False
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, proxy_session.request_balance)
+            if not g.server_host:
+                xlog.debug("no server host after request_balance")
+                return False
+        
+        if hasattr(g, 'session') and g.session and hasattr(g.session, 'last_send_time'):
+            if g.session.running and time.time() - g.session.last_send_time > 300 - 5:
+                xlog.warn("session timeout, reset")
+                await g.session.reset()
         
         if not g.session.running:
             return await g.session.start()
