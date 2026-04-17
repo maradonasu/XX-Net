@@ -23,10 +23,12 @@ class AsyncWaitQueue:
     def __init__(self) -> None:
         self._event: asyncio.Event = asyncio.Event()
         self._running: bool = True
+        self._waiters: int = 0
     
     async def wait(self, timeout: Optional[float] = None) -> bool:
         if not self._running:
             return False
+        self._waiters += 1
         try:
             if timeout:
                 await asyncio.wait_for(self._event.wait(), timeout)
@@ -35,6 +37,8 @@ class AsyncWaitQueue:
             return self._running
         except asyncio.TimeoutError:
             return False
+        finally:
+            self._waiters -= 1
     
     def notify(self) -> None:
         self._event.set()
@@ -46,7 +50,12 @@ class AsyncWaitQueue:
     
     def reset(self) -> None:
         self._running = True
+        self._waiters = 0
         self._event = asyncio.Event()
+    
+    @property
+    def waiters(self) -> int:
+        return self._waiters
 
 
 class AsyncSendBuffer:

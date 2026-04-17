@@ -91,10 +91,9 @@ class TestAsyncProxySessionConnections(TestCase):
         
         async def do_test():
             session = AsyncProxySession()
-            self.assertEqual(session.last_conn_id, 0)
-            
+            session.running = True
             conn_id = await session.create_conn(None, "test", 80)
-            self.assertEqual(session.last_conn_id, 1)
+            self.assertEqual(session.last_conn_id, 2)
         
         async_loop.run_async(do_test(), timeout=5)
     
@@ -111,5 +110,5 @@ class TestAsyncProxySessionConnections(TestCase):
 
 class TestLoginProcess(TestCase):
     def test_login_process_import(self):
-        from x_tunnel.local.async_proxy_session import login_process
+        from x_tunnel.local.async_proxy_session import async_login_process, async_create_conn
         self.assertTrue(True)

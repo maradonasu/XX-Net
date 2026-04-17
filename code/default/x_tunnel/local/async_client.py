@@ -43,6 +43,9 @@ from . import proxy_session
 from . import front_dispatcher
 from . import config
 from . import web_control
+from .async_proxy_session import AsyncProxySession, async_login_process, async_create_conn
+
+_USE_ASYNC_PROXY_SESSION = os.environ.get("XXNET_ASYNC_SESSION", "0") == "1"
 
 
 def create_data_path():
@@ -85,68 +88,99 @@ class SessionProxyHandler(AsyncSocks5Handler):
             await self.writer.drain()
             return
 
+        if _USE_ASYNC_PROXY_SESSION and isinstance(g.session, AsyncProxySession):
+            await async_login_process()
+            
+            if not g.session.running:
+                xlog.warn("_handle_connect: async session not running")
+                self.writer.write(b"\x05\x05\x00\x01\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
+            
+            local_sock, remote_sock = socket.socketpair()
+            
+            try:
+                conn_id = await g.session.create_conn(remote_sock, host, port, True)
+            except Exception as e:
+                xlog.debug("async create_conn failed: %r", e)
+                local_sock.close()
+                remote_sock.close()
+                self.writer.write(b"\x05\x05\x00\x01\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
+            
+            if conn_id is None:
+                xlog.debug("_handle_connect: async conn_id is None")
+                local_sock.close()
+                remote_sock.close()
+                self.writer.write(b"\x05\x05\x00\x01\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
+            
+            self.writer.write(b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00")
+            await self.writer.drain()
+            
+            conn = g.session.conn_list.get(conn_id)
+            await self._start_relay_and_conn_async(local_sock, conn)
+        else:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, proxy_session.login_process)
+
+            if not g.session.running:
+                xlog.warn("_handle_connect: session not running after login_process")
+                self.writer.write(b"\x05\x05\x00\x01\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
+
+            local_sock, remote_sock = socket.socketpair()
+
+            try:
+                conn_id = await loop.run_in_executor(
+                    None,
+                    functools.partial(g.session.create_conn, remote_sock, host, port, True)
+                )
+            except Exception as e:
+                xlog.debug("create_conn failed: %r", e)
+                local_sock.close()
+                remote_sock.close()
+                self.writer.write(b"\x05\x05\x00\x01\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
+
+            if conn_id is None:
+                xlog.debug("_handle_connect: conn_id is None")
+                local_sock.close()
+                remote_sock.close()
+                self.writer.write(b"\x05\x05\x00\x01\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
+
+            self.writer.write(b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00")
+            await self.writer.drain()
+
+            conn = g.session.conn_list.get(conn_id)
+            await self._start_relay_and_conn(local_sock, conn)
+
+    async def _start_relay_and_conn_async(self, local_sock: socket.socket, conn: Any) -> None:
         loop = asyncio.get_event_loop()
-
-        await loop.run_in_executor(None, proxy_session.login_process)
-
-        if not g.session.running:
-            xlog.warn("_handle_connect: session not running after login_process")
-            self.writer.write(b"\x05\x05\x00\x01\x00\x00\x00\x00\x00\x00")
-            await self.writer.drain()
-            return
-
-        local_sock, remote_sock = socket.socketpair()
-
-        try:
-            conn_id = await loop.run_in_executor(
-                None,
-                functools.partial(g.session.create_conn, remote_sock, host, port, True)
-            )
-        except Exception as e:
-            xlog.debug("create_conn failed: %r", e)
-            local_sock.close()
-            remote_sock.close()
-            self.writer.write(b"\x05\x05\x00\x01\x00\x00\x00\x00\x00\x00")
-            await self.writer.drain()
-            return
-
-        if conn_id is None:
-            xlog.debug("_handle_connect: conn_id is None")
-            local_sock.close()
-            remote_sock.close()
-            self.writer.write(b"\x05\x05\x00\x01\x00\x00\x00\x00\x00\x00")
-            await self.writer.drain()
-            return
-
-        self.writer.write(b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00")
-        await self.writer.drain()
-
-        conn = g.session.conn_list.get(conn_id)
-        await self._start_relay_and_conn(local_sock, conn)
-
-    async def _start_relay_and_conn(self, local_sock: socket.socket, conn: Any) -> None:
-        loop = asyncio.get_event_loop()
-
         local_sock.setblocking(False)
-
+        
         _local_reader = asyncio.StreamReader()
         
         def protocol_factory():
             return asyncio.StreamReaderProtocol(_local_reader)
-
+        
         try:
             transport, protocol = await loop.connect_accepted_socket(
                 protocol_factory,
                 sock=local_sock,
             )
         except Exception as e:
-            xlog.exception("_start_relay_and_conn: connect_accepted_socket failed: %r", e)
+            xlog.exception("_start_relay_and_conn_async: connect_accepted_socket failed: %r", e)
             return
-
+        
         _local_writer = asyncio.StreamWriter(transport, protocol, _local_reader, loop)
-        if conn:
-            await loop.run_in_executor(None, conn.start, False)
-
+        
         async def _client_to_session():
             try:
                 while True:
@@ -163,7 +197,7 @@ class SessionProxyHandler(AsyncSocks5Handler):
                     await _local_writer.wait_closed()
                 except Exception:
                     pass
-
+        
         async def _session_to_client():
             try:
                 while True:
@@ -174,13 +208,72 @@ class SessionProxyHandler(AsyncSocks5Handler):
                     await self.writer.drain()
             except Exception:
                 pass
-
+        
         await asyncio.gather(
             _client_to_session(),
             _session_to_client(),
             return_exceptions=True,
         )
+        
+        if conn and hasattr(conn, 'stop_async'):
+            await conn.stop_async("relay_end")
 
+    async def _start_relay_and_conn(self, local_sock: socket.socket, conn: Any) -> None:
+        loop = asyncio.get_event_loop()
+        local_sock.setblocking(False)
+        
+        _local_reader = asyncio.StreamReader()
+        
+        def protocol_factory():
+            return asyncio.StreamReaderProtocol(_local_reader)
+        
+        try:
+            transport, protocol = await loop.connect_accepted_socket(
+                protocol_factory,
+                sock=local_sock,
+            )
+        except Exception as e:
+            xlog.exception("_start_relay_and_conn: connect_accepted_socket failed: %r", e)
+            return
+        
+        _local_writer = asyncio.StreamWriter(transport, protocol, _local_reader, loop)
+        if conn:
+            await loop.run_in_executor(None, conn.start, False)
+        
+        async def _client_to_session():
+            try:
+                while True:
+                    data = await self.reader.read(65536)
+                    if not data:
+                        break
+                    _local_writer.write(data)
+                    await _local_writer.drain()
+            except Exception:
+                pass
+            finally:
+                try:
+                    _local_writer.close()
+                    await _local_writer.wait_closed()
+                except Exception:
+                    pass
+        
+        async def _session_to_client():
+            try:
+                while True:
+                    data = await _local_reader.read(65536)
+                    if not data:
+                        break
+                    self.writer.write(data)
+                    await self.writer.drain()
+            except Exception:
+                pass
+        
+        await asyncio.gather(
+            _client_to_session(),
+            _session_to_client(),
+            return_exceptions=True,
+        )
+        
         if conn and conn.conn_id in g.session.conn_list:
             await loop.run_in_executor(None, conn.stop)
 
@@ -190,42 +283,76 @@ class SessionProxyHandler(AsyncSocks5Handler):
             await self.writer.drain()
             return
 
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, proxy_session.login_process)
-
-        if not g.session.running:
-            self.writer.write(b"\x00\x5b\x00\x00\x00\x00\x00\x00")
+        if _USE_ASYNC_PROXY_SESSION and isinstance(g.session, AsyncProxySession):
+            await async_login_process()
+            
+            if not g.session.running:
+                self.writer.write(b"\x00\x5b\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
+            
+            local_sock, remote_sock = socket.socketpair()
+            
+            try:
+                conn_id = await g.session.create_conn(remote_sock, host, port, True)
+            except Exception as e:
+                xlog.debug("socks4 async create_conn failed: %r", e)
+                local_sock.close()
+                remote_sock.close()
+                self.writer.write(b"\x00\x5b\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
+            
+            if conn_id is None:
+                local_sock.close()
+                remote_sock.close()
+                self.writer.write(b"\x00\x5b\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
+            
+            conn = g.session.conn_list.get(conn_id)
+            
+            self.writer.write(b"\x00\x5a\x00\x00\x00\x00\x00\x00")
             await self.writer.drain()
-            return
+            
+            await self._start_relay_and_conn_async(local_sock, conn)
+        else:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, proxy_session.login_process)
 
-        local_sock, remote_sock = socket.socketpair()
+            if not g.session.running:
+                self.writer.write(b"\x00\x5b\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
 
-        try:
-            conn_id = await loop.run_in_executor(
-                None,
-                functools.partial(g.session.create_conn, remote_sock, host, port, True)
-            )
-        except Exception as e:
-            xlog.debug("socks4 create_conn failed: %r", e)
-            local_sock.close()
-            remote_sock.close()
-            self.writer.write(b"\x00\x5b\x00\x00\x00\x00\x00\x00")
+            local_sock, remote_sock = socket.socketpair()
+
+            try:
+                conn_id = await loop.run_in_executor(
+                    None,
+                    functools.partial(g.session.create_conn, remote_sock, host, port, True)
+                )
+            except Exception as e:
+                xlog.debug("socks4 create_conn failed: %r", e)
+                local_sock.close()
+                remote_sock.close()
+                self.writer.write(b"\x00\x5b\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
+
+            if conn_id is None:
+                local_sock.close()
+                remote_sock.close()
+                self.writer.write(b"\x00\x5b\x00\x00\x00\x00\x00\x00")
+                await self.writer.drain()
+                return
+
+            conn = g.session.conn_list.get(conn_id)
+
+            self.writer.write(b"\x00\x5a\x00\x00\x00\x00\x00\x00")
             await self.writer.drain()
-            return
 
-        if conn_id is None:
-            local_sock.close()
-            remote_sock.close()
-            self.writer.write(b"\x00\x5b\x00\x00\x00\x00\x00\x00")
-            await self.writer.drain()
-            return
-
-        conn = g.session.conn_list.get(conn_id)
-
-        self.writer.write(b"\x00\x5a\x00\x00\x00\x00\x00\x00")
-        await self.writer.drain()
-
-        await self._start_relay_and_conn(local_sock, conn)
+            await self._start_relay_and_conn(local_sock, conn)
 
 
 class _HandlerCompat:
@@ -272,9 +399,14 @@ async def _async_main(config_args):
 
     g.http_client = front_dispatcher
 
-    xlog.debug("Creating ProxySession...")
-    g.session = await loop.run_in_executor(None, proxy_session.ProxySession)
-    xlog.debug("ProxySession created, running=%s", g.session.running if g.session else "None")
+    if _USE_ASYNC_PROXY_SESSION:
+        xlog.info("Using AsyncProxySession")
+        g.session = AsyncProxySession()
+        await g.session.start()
+    else:
+        xlog.debug("Creating ProxySession...")
+        g.session = await loop.run_in_executor(None, proxy_session.ProxySession)
+        xlog.debug("ProxySession created, running=%s", g.session.running if g.session else "None")
 
     socks_port = config_args.get("socks_port", g.config.socks_port)
     allow_remote = config_args.get("allow_remote", 0)
@@ -321,6 +453,11 @@ async def _async_main(config_args):
         xlog.debug("_async_main: exiting, g.running=%s", g.running)
         g.running = False
         await socks_server._stop_async()
+        if g.session:
+            if isinstance(g.session, AsyncProxySession):
+                await g.session.stop()
+            else:
+                g.session.stop()
         xlog.info("Async SOCKS5 server stopped")
 
 
@@ -358,7 +495,12 @@ def stop():
 
     if g.session:
         xlog.info("Stopping session")
-        g.session.stop()
+        if isinstance(g.session, AsyncProxySession):
+            loop = async_loop.get_loop()
+            if loop.is_running():
+                asyncio.run_coroutine_threadsafe(g.session.stop(), loop)
+        else:
+            g.session.stop()
         g.session = None
 
     async_loop.stop()
