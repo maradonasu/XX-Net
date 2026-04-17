@@ -43,10 +43,11 @@ class AsyncReceiveProcess:
         self._lock: asyncio.Lock = asyncio.Lock()
         
         self.next_sn: int = 1
-        self.block_list: List[int] = []
+        self.block_list: Dict[int, bytes] = {}
         self.timeout_list: Dict[int, dict] = {}
     
     async def put(self, sn: int, data: bytes) -> None:
+        pending_data: List[bytes] = []
         async with self._lock:
             if sn in self.timeout_list:
                 del self.timeout_list[sn]
@@ -57,22 +58,21 @@ class AsyncReceiveProcess:
             if sn > self.next_sn:
                 if sn in self.block_list:
                     return
-                self.block_list.append(sn)
-                try:
-                    await self._handler(data)
-                except Exception as e:
-                    self.xlog.warn("receive handler error: %r", e)
+                self.block_list[sn] = data
                 return
             
-            try:
-                await self._handler(data)
-            except Exception as e:
-                self.xlog.warn("receive handler error: %r", e)
+            pending_data.append(data)
             self.next_sn += 1
             
             while self.next_sn in self.block_list:
-                self.block_list.remove(self.next_sn)
+                pending_data.append(self.block_list.pop(self.next_sn))
                 self.next_sn += 1
+
+        for item in pending_data:
+            try:
+                await self._handler(item)
+            except Exception as e:
+                self.xlog.warn("receive handler error: %r", e)
     
     def is_received(self, sn: int) -> bool:
         return sn < self.next_sn or sn in self.block_list
@@ -103,7 +103,7 @@ class AsyncReceiveProcess:
     async def reset(self) -> None:
         async with self._lock:
             self.next_sn = 1
-            self.block_list = []
+            self.block_list = {}
             self.timeout_list = {}
     
     def status(self) -> str:

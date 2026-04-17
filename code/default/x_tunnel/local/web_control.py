@@ -10,16 +10,17 @@ import hashlib
 import threading
 import json
 import base64
+import inspect
 
 import utils
 from log_buffer import getLogger
 xlog = getLogger("x_tunnel")
 
 import http_server
+import async_loop
 from .context import ctx
 from . import api_client
 from .config import XTunnelConfig
-from .tls_relay_front import web_control as tls_relay_web
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 default_path = os.path.abspath(os.path.join(current_path, os.pardir, os.pardir))
@@ -30,6 +31,22 @@ import env_info
 data_path = os.path.join(env_info.data_path, 'x_tunnel')
 _task_lock = threading.Lock()
 _background_tasks = {}
+
+
+def _get_tls_relay_web():
+    from .tls_relay_front import web_control as tls_relay_web
+    return tls_relay_web
+
+
+def run_session_action(session, action, *args, **kwargs):
+    if not session:
+        return None
+
+    method = getattr(session, action)
+    result = method(*args, **kwargs)
+    if inspect.iscoroutine(result):
+        return async_loop.run_async(result)
+    return result
 
 
 def _start_background_task(name, target, args=()):
@@ -127,6 +144,7 @@ class ControlHandler(http_server.HttpServerHandler):
             controler.do_GET()
         elif path.startswith("/tls_relay_front/"):
             path = self.path[16:]
+            tls_relay_web = _get_tls_relay_web()
             controler = tls_relay_web.ControlHandler(self.client_address,
                              self.headers,
                              self.command, path,
@@ -182,6 +200,7 @@ class ControlHandler(http_server.HttpServerHandler):
             controler.do_POST()
         elif path.startswith("/tls_relay_front/"):
             path = path[16:]
+            tls_relay_web = _get_tls_relay_web()
             controler = tls_relay_web.ControlHandler(self.client_address,
                                                       self.headers,
                                                       self.command, path,
@@ -298,7 +317,7 @@ class ControlHandler(http_server.HttpServerHandler):
                 "reason": "Password format fail"
             })
 
-        ctx.config.api_server = XTunnelConfictx.api_server
+        ctx.config.api_server = ctx.config.api_server or XTunnelConfig.api_server
         if ctx.config.update_cloudflare_domains and cloudflare_domains:
             ctx.http_client.save_cloudflare_domain(cloudflare_domains)
         if ctx.tls_relay_front and tls_relay.get("ips"):
@@ -318,7 +337,7 @@ class ControlHandler(http_server.HttpServerHandler):
                 "openai_balance": float(ctx.openai_balance)
             }
             ctx.last_refresh_time = time.time()
-            ctx.session.start()
+            run_session_action(ctx.session, "start")
         else:
             res_arr = {
                 "res": "fail",
@@ -372,7 +391,7 @@ class ControlHandler(http_server.HttpServerHandler):
                 "openai_balance": float(ctx.openai_balance)
             }
             ctx.last_refresh_time = time.time()
-            ctx.session.start()
+            run_session_action(ctx.session, "start")
         else:
             res_arr = {
                 "res": "fail",
@@ -440,7 +459,7 @@ class ControlHandler(http_server.HttpServerHandler):
         ctx.config.save()
 
         if ctx.session:
-            ctx.session.stop()
+            run_session_action(ctx.session, "stop")
 
         return self.response_json({"res": "success"})
 
@@ -480,7 +499,7 @@ class ControlHandler(http_server.HttpServerHandler):
                         ctx.server_port = ctx.config.server_port = 443
                         ctx.config.save()
 
-                        _start_background_task("session_reset", ctx.session.reset)
+                        _start_background_task("session_reset", run_session_action, args=(ctx.session, "reset"))
 
                     res = {"res": "success"}
                 else:

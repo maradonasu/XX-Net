@@ -505,19 +505,20 @@ class AsyncConn:
     
     async def _do_connect(self, host: str, port: int) -> Tuple[Optional[socket.socket], bool]:
         try:
-            if ':' in host:
-                ip = host
-            elif utils.check_ip_valid4(host):
-                ip = host
+            loop = asyncio.get_event_loop()
+            if ':' in host or utils.check_ip_valid4(host):
+                family = socket.AF_INET6 if ':' in host else socket.AF_INET
+                addr_info = [(family, socket.SOCK_STREAM, 0, "", (host, port))]
             else:
-                ip = socket.gethostbyname(host)
-            
-            sock = socket.socket(socket.AF_INET if ':' not in ip else socket.AF_INET6)
+                addr_info = await loop.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+
+            family, sock_type, proto, _, address = addr_info[0]
+            sock = socket.socket(family, sock_type, proto)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 262144)
             sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, True)
-            sock.settimeout(30)
-            sock.connect((ip, port))
+            sock.setblocking(False)
+            await loop.sock_connect(sock, address)
             sock.setblocking(False)
             return sock, True
         except Exception as e:

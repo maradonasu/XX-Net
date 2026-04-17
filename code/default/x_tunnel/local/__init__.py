@@ -8,10 +8,9 @@ _noarch_lib = os.path.abspath(os.path.join(_root_path, 'lib', 'noarch'))
 
 import sys
 if _noarch_lib not in sys.path:
-    sys.path.insert(0, _noarch_lib)
+    sys.path.append(_noarch_lib)
 
 from . import apis
-from . import web_control
 from .context import ctx as _ctx
 
 from . import async_client as _client_mod

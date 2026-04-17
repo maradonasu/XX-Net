@@ -25,6 +25,16 @@ class ProxyTest(TestCase):
     def __init__(self, methodName="runTest"):
         super().__init__(methodName)
 
+    def ensure_xtunnel_ready_for_proxy(self):
+        res = simple_http_client.request("GET", "http://127.0.0.1:8085/module/x_tunnel/control/info", timeout=10)
+        self.assertEqual(res.status, 200)
+        info = json.loads(utils.to_str(res.text))
+        if info.get("res") == "logout":
+            if os.getenv("XTUNNEL_TOKEN"):
+                self.xtunnel_token_login()
+                return
+            self.skipTest("x_tunnel 未登录，且未提供 XTUNNEL_TOKEN")
+
     def test_xtunnel_logout(self):
         xlog.info("Start testing XTunnel logout")
         res = simple_http_client.request("POST", "http://127.0.0.1:8085/module/x_tunnel/control/logout", timeout=10)
@@ -97,8 +107,7 @@ class ProxyTest(TestCase):
 
     def test_xtunnel_proxy_http(self):
         xlog.info("Start testing XTunnel HTTP proxy protocol")
-        # if not self.xtunnel_login_status:
-        #     self.xtunnel_token_login()
+        self.ensure_xtunnel_ready_for_proxy()
         proxy = "http://localhost:1080"
         for _ in range(3):
             res = simple_http_client.request("GET", "https://github.com/", proxy=proxy, timeout=30)

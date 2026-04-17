@@ -8,8 +8,8 @@ from threading import Lock
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-FRONT_FAIL_BASE_PENALTY: int = 5000
-FRONT_PENALTY_DECAY_SECONDS: int = 60
+FRONT_FAIL_BASE_PENALTY: int = 1000
+FRONT_PENALTY_DECAY_SECONDS: int = 30
 FRONT_DISABLE_THRESHOLD: int = 10
 FRONT_DISABLE_DURATION: int = 120
 

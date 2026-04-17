@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+import asyncio
 import sys
 import os
+import unittest.mock as mock
 
 noarch_lib = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'noarch'))
 if noarch_lib not in sys.path:
-    sys.path.insert(0, noarch_lib)
+    sys.path.append(noarch_lib)
 
 code_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if code_dir not in sys.path:
-    sys.path.insert(0, code_dir)
+    sys.path.append(code_dir)
 
 from unittest import TestCase
 import x_tunnel.local.async_base_container as bc
@@ -117,3 +119,66 @@ class TestReadBuffer(TestCase):
     def test_str_conversion(self):
         rb = bc.ReadBuffer(b"test")
         self.assertEqual(str(rb), "test")
+
+
+class TestAsyncReceiveProcess(TestCase):
+    def test_out_of_order_packets_are_delivered_in_sequence(self):
+        received = []
+
+        async def handler(data):
+            received.append(data)
+
+        async def scenario():
+            from x_tunnel.local.async_proxy_session import AsyncReceiveProcess
+
+            proc = AsyncReceiveProcess(handler, mock.Mock())
+            await proc.put(2, b"two")
+            self.assertEqual(received, [])
+            await proc.put(1, b"one")
+            self.assertEqual(received, [b"one", b"two"])
+
+        asyncio.run(scenario())
+
+
+class TestAsyncConn(TestCase):
+    def test_do_connect_uses_async_resolution_and_connect(self):
+        class FakeSocket:
+            def __init__(self):
+                self.options = []
+                self.blocking = True
+
+            def setsockopt(self, *args):
+                self.options.append(args)
+
+            def setblocking(self, value):
+                self.blocking = value
+
+        class FakeLoop:
+            def __init__(self):
+                self.calls = []
+
+            async def getaddrinfo(self, host, port, **kwargs):
+                self.calls.append(("getaddrinfo", host, port, kwargs))
+                return [(mock.sentinel.family, mock.sentinel.socktype, 0, "", ("1.2.3.4", port))]
+
+            async def sock_connect(self, sock, address):
+                self.calls.append(("sock_connect", sock, address))
+
+        async def scenario():
+            fake_loop = FakeLoop()
+            fake_socket = FakeSocket()
+            session = mock.AsyncMock()
+            conn = bc.AsyncConn(session, 1, None, "example.com", 443, mock.Mock())
+
+            with mock.patch("x_tunnel.local.async_base_container.asyncio.get_event_loop", return_value=fake_loop), \
+                 mock.patch("x_tunnel.local.async_base_container.socket.socket", return_value=fake_socket), \
+                 mock.patch("x_tunnel.local.async_base_container.utils.check_ip_valid4", return_value=False):
+                sock, ok = await conn._do_connect("example.com", 443)
+
+            self.assertTrue(ok)
+            self.assertIs(sock, fake_socket)
+            self.assertEqual(fake_loop.calls[0][0], "getaddrinfo")
+            self.assertEqual(fake_loop.calls[1][0], "sock_connect")
+            self.assertFalse(fake_socket.blocking)
+
+        asyncio.run(scenario())

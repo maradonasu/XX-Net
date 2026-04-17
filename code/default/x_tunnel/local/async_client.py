@@ -41,7 +41,6 @@ from async_socks5 import AsyncSocks5Handler, AsyncSocks5Server
 from .context import ctx
 from . import front_dispatcher
 from . import config
-from . import web_control
 from .async_proxy_session import AsyncProxySession, async_login_process, async_create_conn
 
 
