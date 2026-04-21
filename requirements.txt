@@ -1,11 +1,8 @@
-babel
-jinja2
 pyasn1>=0.6.0
 dnslib>=0.9.26
 asn1crypto>=1.5.1
 ecdsa>=0.18.0
 PySocks>=1.7.0
-sortedcontainers>=2.4.0
 brotli>=1.0.0
 h2>=4.0.0
 hpack>=4.0.0

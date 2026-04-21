@@ -11,6 +11,7 @@ if _noarch_lib not in sys.path:
     sys.path.append(_noarch_lib)
 
 from . import apis
+from . import web_control
 from .context import ctx as _ctx
 
 from . import async_client as _client_mod

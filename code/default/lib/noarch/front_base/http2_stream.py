@@ -350,7 +350,14 @@ class Stream(object):
             self.logger.warn("%s missing :status header in response, headers: %s", self.ip_str, self.response_headers)
             status = 502
         else:
-            status = int(status_header[0])
+            if isinstance(status_header, (list, tuple)):
+                status_header = status_header[0]
+            if isinstance(status_header, int):
+                status = status_header
+            elif isinstance(status_header, bytes):
+                status = int(status_header)
+            else:
+                status = int(status_header)
         strip_headers(self.response_headers)
         response = _BaseResponse(status=status, headers=self.response_headers)
         response.ssl_sock = self.connection.ssl_sock
